@@ -5,6 +5,8 @@ here; the design notes in `docs/` are the long version for each subsystem.
 
 ## Build & test
 
+You need **Xcode 26** (the app runs on macOS 15+, but the UI layer sits close to the
+Swift type-checker's budget and older toolchains reject it — CI builds on macos-26).
 Everything except the .app shells is a Swift package:
 
 ```sh

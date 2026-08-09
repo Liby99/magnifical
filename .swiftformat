@@ -1,0 +1,59 @@
+# SwiftFormat config for the native MagiCal codebase (CalendarKit + CalendarApp).
+# Tool: swiftformat 0.62.x (brew install swiftformat)
+#
+# Run from native/:   swiftformat .
+# Check only:         swiftformat --lint .
+#
+# IMPORTANT: the first full run touches many files — do it as a single dedicated commit on a
+# quiet tree (no in-flight agent work), never mixed with logic changes.
+#
+# The commented-out --disable lines below are rules that clash with pre-formatter idioms
+# (hit-counts from the 2026-07-18 dry run annotated). They are LEFT ACTIVE on purpose — the
+# formatter should actually enforce a style — but each is a one-line uncomment if its rewrite
+# proves unbearable in review.
+
+--swiftversion 5.10
+
+# ── Layout ─────────────────────────────────────────────────────────────────────
+--maxwidth 120
+--indent 4
+--tabwidth 4
+--trimwhitespace always
+--stripunusedargs closure-only
+
+# ── Candidate opt-outs (ACTIVE unless uncommented; see header) ─────────────────
+# --disable wrapIfStatementBodies       # 1682 hits — single-line `if x { y }` bodies
+# --disable wrapFunctionBodies          #  447 — one-line funcs
+# --disable wrapLoopBodies              #  162
+# --disable wrapPropertyBodies          #  156
+# --disable wrapIfExpressionBodies      #   52
+# --disable consecutiveSpaces           # 1499 — aligned trailing comments
+# --disable docComments                 #  434 — `//` → `///` promotion
+# --disable blankLinesBetweenScopes     #  375 — compact accessor clusters
+# --disable wrapSingleLineComments      #   63 — long prose comments
+# --disable hoistPatternLet             #   46 — `case .x(let a)` placement
+# --disable noForceUnwrapInTests        #   37
+# --disable conditionalAssignment       #   23 — if/else-expression rewrites
+
+# ── Kept opt-outs: semantic/ordering choices the formatter must not make ───────
+--disable blankLinesAtStartOfScope    # some types intentionally open with a comment block
+--disable wrapMultilineStatementBraces
+--disable andOperator                 # `&&` vs `,` in guards left to the author
+--disable organizeDeclarations        # member order is meaningful (documented sections)
+--disable extensionAccessControl
+--disable redundantSelf               # explicit self is used deliberately around closures
+--disable opaqueGenericParameters
+
+# ── Enabled niceties ───────────────────────────────────────────────────────────
+--enable isEmpty                      # .count == 0 → .isEmpty
+--enable sortImports
+--enable duplicateImports
+--enable redundantParens
+--enable trailingCommas
+
+# ── Exclusions ─────────────────────────────────────────────────────────────────
+--exclude CalendarKit/.build
+--exclude CalendarApp/build
+--exclude CalendarKit/Sources/CalendarUI/Resources   # bundled JS/CSS, not Swift
+--exclude CalendarKit/legacy                         # retired code, kept byte-exact as shipped
+--exclude CalendarApp/CalendarApp.xcodeproj
