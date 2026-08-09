@@ -3,7 +3,7 @@
 #
 #   archive → export (Developer ID) → notarize → staple → DMG → staple DMG
 #
-# Prerequisites (one-time — see native/CalendarApp/DISTRIBUTE.md for the full runbook):
+# Prerequisites (one-time — see native/MagnifiCalApp/DISTRIBUTE.md for the full runbook):
 #   • A "Developer ID Application" certificate in your login keychain
 #       security find-identity -v -p codesigning   # should list "Developer ID Application: …"
 #   • A stored notarytool credential profile:
@@ -13,9 +13,9 @@
 #     because a Developer-ID build talks to the CloudKit *production* environment.
 #
 # Usage:
-#   native/CalendarApp/scripts/package.sh              # full signed+notarized build
-#   NOTARIZE=0 native/CalendarApp/scripts/package.sh   # skip notarization (local smoke test)
-#   NOTARY_PROFILE=my-profile native/CalendarApp/scripts/package.sh
+#   native/MagnifiCalApp/scripts/package.sh              # full signed+notarized build
+#   NOTARIZE=0 native/MagnifiCalApp/scripts/package.sh   # skip notarization (local smoke test)
+#   NOTARY_PROFILE=my-profile native/MagnifiCalApp/scripts/package.sh
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -41,7 +41,7 @@ echo "▸ regenerate Xcode project from project.yml"
 xcodegen generate >/dev/null
 
 echo "▸ archive (Release)"
-xcodebuild -project "CalendarApp.xcodeproj" -scheme "$SCHEME" \
+xcodebuild -project "MagnifiCalApp.xcodeproj" -scheme "$SCHEME" \
   -configuration Release -destination 'generic/platform=macOS' \
   -archivePath "$ARCHIVE" -allowProvisioningUpdates archive >/dev/null
 

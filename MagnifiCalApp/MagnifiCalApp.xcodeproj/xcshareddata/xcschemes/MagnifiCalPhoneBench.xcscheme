@@ -17,13 +17,13 @@
                BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
                BuildableName = "MagnifiCal.app"
                BlueprintName = "CalendarPhone"
-               ReferencedContainer = "container:CalendarApp.xcodeproj">
+               ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
-      buildConfiguration = "Release"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
@@ -33,7 +33,7 @@
             BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -56,13 +56,60 @@
             BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "CC_DEMO"
+            value = "bench-idle"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_FPS_HUD"
+            value = "1"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_BENCH_PAYLOAD"
+            value = "display"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_BENCH_TAG"
+            value = "main"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_PROF"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_CANVAS_OFF"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_ZOOMCANVAS_OFF"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_BANDGRAIN_OFF"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_YEARCACHE_OFF"
+            value = "1"
+            isEnabled = "NO">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
@@ -73,12 +120,29 @@
             BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "CC_DEMO"
+            value = "bench-idle"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_PROF"
+            value = "1"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "CC_BENCH_PAYLOAD"
+            value = "display"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </ProfileAction>
    <AnalyzeAction
-      buildConfiguration = "Release">
+      buildConfiguration = "Debug">
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"

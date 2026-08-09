@@ -9,7 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APPDIR="$(cd "$HERE/.." && pwd)"
 ICONSET="$APPDIR/Assets.xcassets/AppIcon.appiconset"
-TUTORIAL="$APPDIR/../CalendarKit/Sources/CalendarUI/Resources/tutorial/app-icon.png"
+TUTORIAL="$APPDIR/../MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/app-icon.png"
 
 echo "▸ render 1024 master"
 swift "$HERE/make-icon.swift" "$ICONSET/icon_1024.png"

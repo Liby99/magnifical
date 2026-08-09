@@ -91,6 +91,9 @@ func calendarKitBaseDir() -> URL {
     }
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
+    // "CalendarKit" is the ON-DISK data folder every existing install already has. The package
+    // directory was renamed MagnifiCalKit (2026-08) but this string must NEVER follow suit —
+    // renaming it would orphan every user's local calendars.
     return base.appendingPathComponent("CalendarKit", isDirectory: true)
 }
 

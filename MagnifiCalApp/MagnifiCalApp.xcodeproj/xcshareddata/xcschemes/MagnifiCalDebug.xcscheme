@@ -17,7 +17,7 @@
                BlueprintIdentifier = "DE278F139424AC7E27E4AB1B"
                BuildableName = "MagnifiCal.app"
                BlueprintName = "CalendarApp"
-               ReferencedContainer = "container:CalendarApp.xcodeproj">
+               ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,7 +33,7 @@
             BlueprintIdentifier = "DE278F139424AC7E27E4AB1B"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarApp"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -56,7 +56,7 @@
             BlueprintIdentifier = "DE278F139424AC7E27E4AB1B"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarApp"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -73,7 +73,7 @@
             BlueprintIdentifier = "DE278F139424AC7E27E4AB1B"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarApp"
-            ReferencedContainer = "container:CalendarApp.xcodeproj">
+            ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

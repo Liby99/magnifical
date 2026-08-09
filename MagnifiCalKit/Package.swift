@@ -23,7 +23,7 @@ import PackageDescription
 /// AppKit and are only built when their product is requested (the macOS app), so they
 /// never compile for iOS.
 let package = Package(
-    name: "CalendarKit",
+    name: "MagnifiCalKit",
     platforms: [.macOS("15.0"), .iOS("26.0")],
     products: [
         .library(name: "CalendarGeometry", targets: ["CalendarGeometry"]),

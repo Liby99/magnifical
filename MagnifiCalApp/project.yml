@@ -1,4 +1,4 @@
-name: CalendarApp
+name: MagnifiCalApp
 options:
   bundleIdPrefix: dev.magnifical
   createIntermediateGroups: true
@@ -6,12 +6,12 @@ options:
     macOS: "15.0" # floor: Liquid Glass falls back to material frost (CalendarKit GlassCompat.swift)
     iOS: "26.0"
 
-# The app depends on the local CalendarKit Swift package (the calendar itself lives
+# The app depends on the local MagnifiCalKit Swift package (the calendar itself lives
 # there); this target is just the shell that hosts CalendarView in a real .app
 # bundle, so Xcode's debugger + View Debugger work fully.
 packages:
-  CalendarKit:
-    path: ../CalendarKit
+  MagnifiCalKit:
+    path: ../MagnifiCalKit
 
 targets:
   CalendarApp:
@@ -21,11 +21,11 @@ targets:
       - path: Sources
       - path: Assets.xcassets
     dependencies:
-      - package: CalendarKit
+      - package: MagnifiCalKit
         product: CalendarUI
       # CalendarEngine is linked directly too so the app can own the shared engine instance
       # and hand it to both the calendar window and the standalone Calendar AI chat window.
-      - package: CalendarKit
+      - package: MagnifiCalKit
         product: CalendarEngine
     settings:
       base:
@@ -72,13 +72,13 @@ targets:
       - path: Assets.xcassets   # shared iconset (iOS uses the single-size 1024 entry)
       # Bench payload fixtures (MagnifiCalPhoneBench scheme, CC_BENCH_PAYLOAD=display|dense|todos|empty).
       # Bundled as plain resources; real-store dumps go through Files ▸ MagnifiCal/bench-payloads instead.
-      - path: ../CalendarKit/bench/year-display-2026.json
+      - path: ../MagnifiCalKit/bench/year-display-2026.json
         buildPhase: resources
-      - path: ../CalendarKit/bench/year-dense-2026.json
+      - path: ../MagnifiCalKit/bench/year-dense-2026.json
         buildPhase: resources
-      - path: ../CalendarKit/bench/todo-dense-2026.json
+      - path: ../MagnifiCalKit/bench/todo-dense-2026.json
         buildPhase: resources
-      - path: ../CalendarKit/bench/empty.json
+      - path: ../MagnifiCalKit/bench/empty.json
         buildPhase: resources
     info:
       path: iOS/Info.plist
@@ -89,9 +89,9 @@ targets:
         UIFileSharingEnabled: true                 # Files app: bench results out, payloads in
         LSSupportsOpeningDocumentsInPlace: true
     dependencies:
-      - package: CalendarKit
+      - package: MagnifiCalKit
         product: CalendarEngine
-      - package: CalendarKit
+      - package: MagnifiCalKit
         product: CalendarRender
     settings:
       base:

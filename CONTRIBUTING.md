@@ -8,13 +8,13 @@ here; the design notes in `docs/` are the long version for each subsystem.
 Everything except the .app shells is a Swift package:
 
 ```sh
-cd CalendarKit
+cd MagnifiCalKit
 swift build          # builds all layers + the CalendarMac dev shell
 swift test           # ~180 tests, hermetic (temp-dir stores, no signing, no network)
 ```
 
 That loop is the whole review gate for most changes — if `swift test` passes, CI passes.
-The .app targets (`CalendarApp.xcodeproj`, generated from `project.yml`) only matter for
+The .app targets (`MagnifiCalApp.xcodeproj`, generated from `project.yml`) only matter for
 changes to the shells themselves; build those in Xcode.
 
 ## Architecture in one paragraph
@@ -32,7 +32,7 @@ drawer, dashboards. Dependencies point strictly down that list.
 - Comments explain *constraints and why*, not what the next line does. Match the density
   you see around you.
 - Perf-sensitive paths (rendering, scrolling): changes need before/after numbers from
-  the bench harness (`CalendarKit/bench/` — see its README for scenes and env flags).
+  the bench harness (`MagnifiCalKit/bench/` — see its README for scenes and env flags).
 
 ## PRs that merge quickly
 

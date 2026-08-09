@@ -38,7 +38,7 @@
 		A765860F0690BF30E7E61549 /* todo-dense-2026.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "todo-dense-2026.json"; sourceTree = "<group>"; };
 		B02BDE9796F06C3BE0399496 /* PhoneCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneCalendarView.swift; sourceTree = "<group>"; };
 		B40312066751FD684A47801C /* PhoneMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneMarkdown.swift; sourceTree = "<group>"; };
-		B6F1345B7435663121D4B4D1 /* CalendarKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CalendarKit; path = ../CalendarKit; sourceTree = SOURCE_ROOT; };
+		B6F1345B7435663121D4B4D1 /* MagnifiCalKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MagnifiCalKit; path = ../MagnifiCalKit; sourceTree = SOURCE_ROOT; };
 		B7DA44B583931677D28DEBF8 /* CalendarPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CalendarPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2565BE4DC5A54E3D396AF1A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C789AA3FD488F088FF6D88E5 /* SyncHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHarnessView.swift; sourceTree = "<group>"; };
@@ -72,7 +72,7 @@
 		44751D4D8CED2F3329600BB4 /* native */ = {
 			isa = PBXGroup;
 			children = (
-				A4841147425F0AEC74CBB706 /* CalendarKit */,
+				A4841147425F0AEC74CBB706 /* MagnifiCalKit */,
 			);
 			name = native;
 			path = ..;
@@ -81,7 +81,7 @@
 		5D687BEEBCEEA6E47290CFF1 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				B6F1345B7435663121D4B4D1 /* CalendarKit */,
+				B6F1345B7435663121D4B4D1 /* MagnifiCalKit */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -117,12 +117,12 @@
 			);
 			sourceTree = "<group>";
 		};
-		A4841147425F0AEC74CBB706 /* CalendarKit */ = {
+		A4841147425F0AEC74CBB706 /* MagnifiCalKit */ = {
 			isa = PBXGroup;
 			children = (
 				62A4BA36FFC99FE1177843FC /* bench */,
 			);
-			path = CalendarKit;
+			path = MagnifiCalKit;
 			sourceTree = "<group>";
 		};
 		B83179594B26ED5721E390DA /* Products */ = {
@@ -223,7 +223,7 @@
 			mainGroup = 9CFBDAFE06324A7CD56AB39E;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				045B4F39907B205958D291B9 /* XCLocalSwiftPackageReference "../CalendarKit" */,
+				045B4F39907B205958D291B9 /* XCLocalSwiftPackageReference "../MagnifiCalKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B83179594B26ED5721E390DA /* Products */;
@@ -543,9 +543,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		045B4F39907B205958D291B9 /* XCLocalSwiftPackageReference "../CalendarKit" */ = {
+		045B4F39907B205958D291B9 /* XCLocalSwiftPackageReference "../MagnifiCalKit" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../CalendarKit;
+			relativePath = ../MagnifiCalKit;
 		};
 /* End XCLocalSwiftPackageReference section */
 

@@ -17,7 +17,7 @@ mkdir -p "$DIR"
 case "${PAYLOAD:-display}" in
   display) cp bench/year-display-2026.json "$DIR/data.json" ;;
   bands)   cp bench/year-bands-2026.json  "$DIR/data.json" ;;
-  full)    cp "$HOME/Library/Application Support/CalendarKit/data.json" "$DIR/data.json" ;;
+  full)    cp "$HOME/Library/Application Support/MagnifiCalKit/data.json" "$DIR/data.json" ;;
   *) echo "unknown PAYLOAD=${PAYLOAD}"; exit 1 ;;
 esac
 # A clean throwaway root: drop any stale sync/registry state a previous run left behind.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Amplify the REAL store's July todo load into a stress fixture (bench/todo-dense-2026.json).
 
-Starts from the live store (~/Library/Application Support/CalendarKit/data.json) so shapes stay
+Starts from the live store (~/Library/Application Support/MagnifiCalKit/data.json) so shapes stay
 authentic (real events, bands, deadlines, existing notes), then piles todo items into July 2026:
   - every July day gets a daily note with a dozen mixed todos (open/done, due:, p:, tags, nesting)
   - July events get todo-bearing notes
@@ -15,7 +15,7 @@ from pathlib import Path
 
 per_day = int(sys.argv[1]) if len(sys.argv) > 1 else 12
 rng = random.Random(20260729)
-src = Path.home() / "Library/Application Support/CalendarKit/data.json"
+src = Path.home() / "Library/Application Support/MagnifiCalKit/data.json"
 d = json.loads(src.read_text())
 
 TAGS = ["paper", "grant", "teaching", "reading", "admin", "travel", "review", "demo"]
