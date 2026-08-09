@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.libirabu.eventkit-bridge</string>
+  <key>CFBundleName</key>
+  <string>libirabu EventKit Bridge</string>
+  <key>CFBundleExecutable</key>
+  <string>eventkit-bridge</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <!-- Background helper: no Dock icon / menu bar. -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>LSMinimumSystemVersion</key>
+  <string>13.0</string>
+  <!-- Required for the EventKit permission prompt. macOS 14+ uses the FullAccess key. -->
+  <key>NSCalendarsUsageDescription</key>
+  <string>libirabu reads your calendars to import events into your calendar.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>libirabu reads your calendars to import events into your calendar.</string>
+</dict>
+</plist>

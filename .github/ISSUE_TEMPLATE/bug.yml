@@ -1,0 +1,19 @@
+name: Bug report
+description: Something is broken
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: "MagnifiCal version", placeholder: "0.1.0 (App Store / DMG / source)" }
+    validations: { required: true }
+  - type: input
+    id: macos
+    attributes: { label: "macOS version", placeholder: "15.5" }
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: "What happened?", description: "Steps to reproduce, what you expected, what you saw. Screenshots/clips welcome." }
+    validations: { required: true }
+  - type: textarea
+    id: extra
+    attributes: { label: "Anything else?", description: "For import bugs: an anonymized .ics snippet. For crashes: Console.app output for subsystem dev.magnifical.calendar." }

@@ -1,0 +1,17 @@
+name: Calendar import quirk
+description: An imported event (Apple / Google / Outlook / .ics) looks wrong
+labels: [bug, import]
+body:
+  - type: dropdown
+    id: source
+    attributes:
+      label: "Import source"
+      options: ["Apple Calendar (EventKit)", "Google Calendar (secret address)", "Outlook (published address)", ".ics file", "Other ICS feed"]
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: "What looks wrong?", description: "Wrong time/day/recurrence/title? Screenshot of MagnifiCal vs the source calendar helps." }
+    validations: { required: true }
+  - type: textarea
+    id: ics
+    attributes: { label: "Anonymized .ics snippet", description: "The VEVENT block with titles/attendees replaced — timestamps and RRULE/TZID kept intact.", render: text }

@@ -1,0 +1,9 @@
+## Xcode / xcodegen — commit project.yml + the generated project, ignore user state
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+.DS_Store
+
+## Release artifacts from scripts/package.sh (archive, exported .app, .dmg)
+build/

@@ -1,0 +1,11 @@
+name: Feature request
+description: An idea for MagnifiCal
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: "What problem would this solve?", description: "Describe the workflow, not just the feature." }
+    validations: { required: true }
+  - type: textarea
+    id: sketch
+    attributes: { label: "How might it work?" }

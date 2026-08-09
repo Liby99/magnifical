@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Export the archive as a Developer-ID-signed app for distribution outside the
+	     App Store (direct download / DMG). Automatic signing picks the "Developer ID
+	     Application" certificate and, for CloudKit/Push, the matching provisioning
+	     profile. -->
+	<key>method</key>
+	<string>developer-id</string>
+	<key>teamID</key>
+	<string>X84ZG75WAM</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>

@@ -1,0 +1,228 @@
+name: CalendarApp
+options:
+  bundleIdPrefix: dev.magnifical
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "15.0" # floor: Liquid Glass falls back to material frost (CalendarKit GlassCompat.swift)
+    iOS: "26.0"
+
+# The app depends on the local CalendarKit Swift package (the calendar itself lives
+# there); this target is just the shell that hosts CalendarView in a real .app
+# bundle, so Xcode's debugger + View Debugger work fully.
+packages:
+  CalendarKit:
+    path: ../CalendarKit
+
+targets:
+  CalendarApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+    dependencies:
+      - package: CalendarKit
+        product: CalendarUI
+      # CalendarEngine is linked directly too so the app can own the shared engine instance
+      # and hand it to both the calendar window and the standalone Calendar AI chat window.
+      - package: CalendarKit
+        product: CalendarEngine
+    settings:
+      base:
+        PRODUCT_NAME: MagnifiCal
+        PRODUCT_BUNDLE_IDENTIFIER: dev.magnifical.calendar
+        # Semver (see native/CHANGELOG.md): bump MARKETING_VERSION per release; CURRENT_PROJECT_VERSION
+        # is the TestFlight build number — unique + ascending per upload (Xcode can auto-manage on upload).
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: MagnifiCal
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        # EventKit (Apple Calendar import): TCC requires a usage string to prompt. The app is NOT
+        # sandboxed (no com.apple.security.app-sandbox entitlement), so this string alone suffices —
+        # a sandboxed build would ALSO need the com.apple.security.personal-information.calendars entitlement.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: MagnifiCal reads your Apple Calendar events so it can show them alongside your MagnifiCal calendar.
+        INFOPLIST_KEY_NSCalendarsUsageDescription: MagnifiCal reads your Apple Calendar events so it can show them alongside your MagnifiCal calendar.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: X84ZG75WAM
+        CODE_SIGN_ENTITLEMENTS: CalendarApp.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+      configs:
+        # Release/Developer-ID builds talk to CloudKit PRODUCTION, so push tokens must be
+        # production too (see CalendarApp-Release.entitlements). Requires the App ID to have
+        # Push Notifications capability in the portal AND the schema deployed to Production;
+        # if the Developer ID export fails to provision, drop this override to fall back to
+        # the base (development) entitlements — push then degrades to sync-on-launch.
+        Release:
+          CODE_SIGN_ENTITLEMENTS: CalendarApp-Release.entitlements
+
+  # iPhone app: a READ-ONLY viewer over the same CloudKit container as the macOS shell
+  # above. It links CalendarEngine (CloudKit sync, constructed with cloudReadOnly: true)
+  # and CalendarRender (the portable scene renderer — Canvas passes + glass overlays);
+  # the AppKit-bound CalendarUI is not linked here, so nothing AppKit compiles for iOS.
+  CalendarPhone:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOS
+      - path: Assets.xcassets   # shared iconset (iOS uses the single-size 1024 entry)
+      # Bench payload fixtures (MagnifiCalPhoneBench scheme, CC_BENCH_PAYLOAD=display|dense|todos|empty).
+      # Bundled as plain resources; real-store dumps go through Files ▸ MagnifiCal/bench-payloads instead.
+      - path: ../CalendarKit/bench/year-display-2026.json
+        buildPhase: resources
+      - path: ../CalendarKit/bench/year-dense-2026.json
+        buildPhase: resources
+      - path: ../CalendarKit/bench/todo-dense-2026.json
+        buildPhase: resources
+      - path: ../CalendarKit/bench/empty.json
+        buildPhase: resources
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: MagnifiCal
+        UILaunchScreen: {}
+        UIBackgroundModes: [remote-notification]   # CKSyncEngine push delivery
+        UIFileSharingEnabled: true                 # Files app: bench results out, payloads in
+        LSSupportsOpeningDocumentsInPlace: true
+    dependencies:
+      - package: CalendarKit
+        product: CalendarEngine
+      - package: CalendarKit
+        product: CalendarRender
+    settings:
+      base:
+        PRODUCT_NAME: MagnifiCal
+        PRODUCT_BUNDLE_IDENTIFIER: dev.magnifical.calendar
+        MARKETING_VERSION: "0.1.0"   # kept in lock-step with the macOS target
+        CURRENT_PROJECT_VERSION: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: X84ZG75WAM
+        CODE_SIGN_ENTITLEMENTS: CalendarApp-iOS.entitlements
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+      configs:
+        # TestFlight/App Store builds talk to CloudKit PRODUCTION → production APNs entitlement
+        # (same Debug/Release split as the macOS target above).
+        Release:
+          CODE_SIGN_ENTITLEMENTS: CalendarApp-iOS-Release.entitlements
+
+# Explicit SHARED schemes for the macOS app (CalendarApp target, product "MagnifiCal"). Declared here so
+# they live in xcshareddata (version-controlled + surviving `xcodegen generate`) instead of the
+# auto-generated per-user schemes that get wiped. MagnifiCalDebug for day-to-day dev; MagnifiCalRelease for
+# optimized (Release) runs — use it, with "Debug executable" unchecked, for on-device perf testing —
+# and for packaging (scripts/package.sh archives this scheme).
+schemes:
+  MagnifiCalDebug:
+    build:
+      targets:
+        CalendarApp: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Debug
+    analyze:
+      config: Debug
+    archive:
+      config: Debug
+  MagnifiCalRelease:
+    build:
+      targets:
+        CalendarApp: all
+    run:
+      config: Release
+    test:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Release
+    archive:
+      config: Release
+  # iPhone read-only viewer (CalendarPhone target, also product "MagnifiCal").
+  MagnifiCalPhoneDebug:
+    build:
+      targets:
+        CalendarPhone: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Debug
+    analyze:
+      config: Debug
+    archive:
+      config: Debug
+  MagnifiCalPhoneRelease:
+    build:
+      targets:
+        CalendarPhone: all
+    run:
+      config: Release
+    test:
+      config: Release
+    profile:
+      config: Release
+    analyze:
+      config: Release
+    archive:
+      config: Release
+  # iPhone BENCH runs (see CalendarKit/bench/PHONE.md): Release build + the CC_* env preset.
+  # Perf numbers are Release-only — Debug SwiftUI is dramatically slower and its numbers are
+  # meaningless. Also uncheck "Debug executable" in Xcode for HUD sessions. Set CC_DEMO to the
+  # scene under test and CC_BENCH_TAG to the git branch before a run; results print to the
+  # console and land in Files ▸ MagnifiCal ▸ bench. The disabled vars are the A/B kill switches.
+  MagnifiCalPhoneBench:
+    build:
+      targets:
+        CalendarPhone: all
+    run:
+      config: Release
+      environmentVariables:
+        - variable: CC_DEMO
+          value: bench-idle
+          isEnabled: true
+        - variable: CC_FPS_HUD
+          value: "1"
+          isEnabled: true
+        - variable: CC_BENCH_PAYLOAD
+          value: display
+          isEnabled: true
+        - variable: CC_BENCH_TAG
+          value: main
+          isEnabled: true
+        - variable: CC_PROF
+          value: "1"
+          isEnabled: false
+        - variable: CC_CANVAS_OFF
+          value: "1"
+          isEnabled: false
+        - variable: CC_ZOOMCANVAS_OFF
+          value: "1"
+          isEnabled: false
+        - variable: CC_BANDGRAIN_OFF
+          value: "1"
+          isEnabled: false
+        - variable: CC_YEARCACHE_OFF
+          value: "1"
+          isEnabled: false
+    profile:
+      config: Release
+      environmentVariables:
+        - variable: CC_DEMO
+          value: bench-idle
+          isEnabled: true
+        - variable: CC_PROF
+          value: "1"
+          isEnabled: true
+        - variable: CC_BENCH_PAYLOAD
+          value: display
+          isEnabled: true

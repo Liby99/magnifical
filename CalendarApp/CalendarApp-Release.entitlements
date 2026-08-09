@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Distribution variant. A Developer-ID-signed app runs against the PRODUCTION
+	     CloudKit environment, so push tokens should be production too. Only wire this
+	     in (project.yml → Release config) once the App ID has the Push Notifications
+	     capability enabled in the developer portal AND the CloudKit schema has been
+	     deployed to Production — otherwise automatic signing fails to provision. See
+	     DISTRIBUTE.md. Until then the base CalendarApp.entitlements (development) is
+	     used and realtime push degrades to sync-on-launch. -->
+	<key>com.apple.developer.aps-environment</key>
+	<string>production</string>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.dev.libirabu.calendar</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<!-- iCloud key-value store for synced app preferences — PINNED to the legacy app id
+	     across the 2026-08 bundle-id rename (see CalendarApp.entitlements). -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)dev.libirabu.calendar</string>
+	<!-- Keychain: legacy group kept readable across the bundle-id rename (see CalendarApp.entitlements). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)dev.magnifical.calendar</string>
+		<string>$(AppIdentifierPrefix)dev.libirabu.calendar</string>
+	</array>
+	<!-- Hardened Runtime resource access: EventKit (Apple Calendar import). -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+</dict>
+</plist>

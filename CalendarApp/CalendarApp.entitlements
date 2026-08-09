@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.aps-environment</key>
+	<string>development</string>
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.dev.libirabu.calendar</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<!-- iCloud key-value store: syncs small app preferences (appearance, …) across the
+	     user's devices via NSUbiquitousKeyValueStore. PINNED to the LEGACY app id (not
+	     $(CFBundleIdentifier)): the bundle id became dev.magnifical.calendar in 2026-08's
+	     rename, and following it would orphan every user's synced prefs. -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)dev.libirabu.calendar</string>
+	<!-- Keychain: new items land in the app's own group (first entry); the LEGACY group is
+	     listed so API keys + ICS feed URLs stored by the dev.libirabu.calendar builds stay
+	     readable after the bundle-id rename (the item service string never changed). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)dev.magnifical.calendar</string>
+		<string>$(AppIdentifierPrefix)dev.libirabu.calendar</string>
+	</array>
+	<!-- Hardened Runtime resource access: EventKit (Apple Calendar import). Pairs with the
+	     NSCalendarsFullAccessUsageDescription usage string in the generated Info.plist. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+</dict>
+</plist>
