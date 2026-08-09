@@ -4,6 +4,12 @@
 // fall back to the closest classic material (.ultraThinMaterial frost + tint wash —
 // no refraction, but the same translucent read). All glass call sites in the tree
 // go through this file; don't call .glassEffect / .buttonStyle(.glass) directly.
+//
+// TWO gates, deliberately: `#if compiler(>=6.2)` is a BUILD-time gate (the Glass /
+// ToolbarSpacer symbols only exist in the macOS 26 SDK, i.e. Xcode 26 / Swift 6.2 —
+// older toolchains, incl. CI runners and contributors on Xcode 16, must not even see
+// them), and `#available` inside it is the RUN-time gate for a 26-SDK build running
+// on macOS 15. A binary built by an old toolchain simply always uses the fallback.
 
 import SwiftUI
 
@@ -22,15 +28,17 @@ public struct CompatGlass: Equatable {
         return g
     }
 
-    /// The real thing, buildable only where the SDK type exists.
-    @available(macOS 26.0, iOS 26.0, *)
-    var native: Glass {
-        var g: Glass = isClear ? .clear : .regular
-        if let tintColor {
-            g = g.tint(tintColor)
+    #if compiler(>=6.2)
+        /// The real thing, buildable only where the SDK type exists.
+        @available(macOS 26.0, iOS 26.0, *)
+        var native: Glass {
+            var g: Glass = isClear ? .clear : .regular
+            if let tintColor {
+                g = g.tint(tintColor)
+            }
+            return g
         }
-        return g
-    }
+    #endif
 }
 
 public extension View {
@@ -39,17 +47,26 @@ public extension View {
     /// view's content.
     @ViewBuilder
     func glassEffectCompat<S: Shape>(_ glass: CompatGlass = .regular, in shape: S) -> some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            glassEffect(glass.native, in: shape)
-        } else {
-            background {
-                ZStack {
-                    if !glass.isClear {
-                        shape.fill(.ultraThinMaterial)
-                    }
-                    if let t = glass.tintColor {
-                        shape.fill(t)
-                    }
+        #if compiler(>=6.2)
+            if #available(macOS 26.0, iOS 26.0, *) {
+                glassEffect(glass.native, in: shape)
+            } else {
+                materialFallback(glass, in: shape)
+            }
+        #else
+            materialFallback(glass, in: shape)
+        #endif
+    }
+
+    /// The pre-26 stand-in: frost + tint wash behind the content.
+    private func materialFallback<S: Shape>(_ glass: CompatGlass, in shape: S) -> some View {
+        background {
+            ZStack {
+                if !glass.isClear {
+                    shape.fill(.ultraThinMaterial)
+                }
+                if let t = glass.tintColor {
+                    shape.fill(t)
                 }
             }
         }
@@ -59,11 +76,15 @@ public extension View {
     /// `.buttonBorderShape(...)` after it as usual — it applies to both branches.
     @ViewBuilder
     func glassButtonStyleCompat() -> some View {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            buttonStyle(.glass)
-        } else {
+        #if compiler(>=6.2)
+            if #available(macOS 26.0, iOS 26.0, *) {
+                buttonStyle(.glass)
+            } else {
+                buttonStyle(.bordered)
+            }
+        #else
             buttonStyle(.bordered)
-        }
+        #endif
     }
 }
 
@@ -78,10 +99,14 @@ public struct ToolbarSpacerCompat: ToolbarContent {
     }
 
     public var body: some ToolbarContent {
-        if #available(macOS 26.0, iOS 26.0, *) {
-            ToolbarSpacer(sizing == .fixed ? .fixed : .flexible)
-        } else {
+        #if compiler(>=6.2)
+            if #available(macOS 26.0, iOS 26.0, *) {
+                ToolbarSpacer(sizing == .fixed ? .fixed : .flexible)
+            } else {
+                ToolbarItem { EmptyView() }
+            }
+        #else
             ToolbarItem { EmptyView() }
-        }
+        #endif
     }
 }
