@@ -15,11 +15,17 @@ struct CalendarApp: App {
     #if canImport(Sparkle)
         /// Sparkle auto-updates — DIRECT (Developer-ID) build only; the Mac App Store variant
         /// drops the Sparkle dependency and this whole block compiles away (canImport). Starting
-        /// the updater here schedules the daily background appcast check (see Info-macOS.plist
-        /// for the feed URL + EdDSA public key).
-        private let updaterController = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil
-        )
+        /// the updater schedules the daily background appcast check (see Info-macOS.plist for
+        /// the feed URL + EdDSA public key). The updater is NOT started until a real key is
+        /// configured: Sparkle refuses the placeholder and pops "The updater failed to start"
+        /// at every launch — with it unstarted, canCheckForUpdates stays false and the menu
+        /// item just sits disabled.
+        private let updaterController: SPUStandardUpdaterController = {
+            let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
+            let keyConfigured = Data(base64Encoded: key)?.count == 32 // a real EdDSA public key
+            return SPUStandardUpdaterController(startingUpdater: keyConfigured,
+                                                updaterDelegate: nil, userDriverDelegate: nil)
+        }()
     #endif
     /// The standalone chat window's session. Lives at app level (not in a window) so it persists
     /// while the window is closed and while only the menu bar is present.
