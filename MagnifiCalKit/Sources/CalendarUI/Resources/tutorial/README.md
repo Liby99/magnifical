@@ -9,7 +9,7 @@ for single-variant assets like the extra Help demos). Record a variant with `THE
 ./scripts/record-tutorial.sh <scene> [seconds]` (demo mode pins "now" to 4 pm so recordings are
 time-of-day independent).
 
-The carousel order (TutorialView.slides) is: pinch-zoom, band-year, timed-week, ai-assistant, markdown-notes.
+The carousel order (TutorialView.slides) is: pinch-zoom, band-year, timed-week, ai-assistant, markdown-notes, dashboard-tour.
 
 | filename            | scene (record-tutorial.sh) | caption |
 |---------------------|----------------------------|---------|
@@ -18,6 +18,7 @@ The carousel order (TutorialView.slides) is: pinch-zoom, band-year, timed-week, 
 | `timed-week.gif`    | `timed-week`  | Drag on the timeline to create timed events. |
 | `ai-assistant.gif`  | `ai-assistant`   | Click the AI button to let AI help you manage your calendar. |
 | `markdown-notes.gif`| `markdown-notes` | Edit markdown notes in events or the daily notepad to add TODO items. |
+| `dashboard-tour.gif`| `dashboard-tour` | The TODO/NOTE/PROJ dashboard tour (⌘B/⌘E/⌘J). NOT YET RECORDED — slide shows the placeholder. |
 
 Full-window scenes (pinch-zoom, ai-assistant) are recorded with `FPS=12 SCALE=900 COLORS=128 DITHER=none` to
 keep the file small; the cropped scenes use the script defaults. All get a `gifsicle --lossy` pass.
