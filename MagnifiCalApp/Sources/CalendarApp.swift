@@ -5,9 +5,22 @@ import AppKit
 import CalendarEngine
 import CalendarUI
 import SwiftUI
+#if canImport(Sparkle)
+    import Combine
+    import Sparkle
+#endif
 
 @main
 struct CalendarApp: App {
+    #if canImport(Sparkle)
+        /// Sparkle auto-updates — DIRECT (Developer-ID) build only; the Mac App Store variant
+        /// drops the Sparkle dependency and this whole block compiles away (canImport). Starting
+        /// the updater here schedules the daily background appcast check (see Info-macOS.plist
+        /// for the feed URL + EdDSA public key).
+        private let updaterController = SPUStandardUpdaterController(
+            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil
+        )
+    #endif
     /// The standalone chat window's session. Lives at app level (not in a window) so it persists
     /// while the window is closed and while only the menu bar is present.
     @State private var assistant: AssistantState
@@ -75,6 +88,9 @@ struct CalendarApp: App {
             // A menu command's key equivalent fires whenever the app is active, across any window.
             CommandGroup(after: .appInfo) {
                 OpenAssistantCommand(engine: engine)
+                #if canImport(Sparkle)
+                    CheckForUpdatesButton(updater: updaterController.updater)
+                #endif
             }
             // Remove SwiftUI's default File → New Window (⌘N). ⌘N is our "new event at the block
             // cursor" shortcut (handled by the calendar's key monitor); otherwise it also spawns a
@@ -179,6 +195,22 @@ struct CalendarApp: App {
         }
     }
 }
+
+#if canImport(Sparkle)
+    /// App menu ▸ "Check for Updates…" — disabled while Sparkle can't check (e.g. an update is
+    /// already in flight). `canCheckForUpdates` is KVO-observable; the Combine publisher bridges
+    /// it into SwiftUI (the standard Sparkle 2 pattern).
+    private struct CheckForUpdatesButton: View {
+        let updater: SPUUpdater
+        @State private var canCheck = false
+
+        var body: some View {
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .disabled(!canCheck)
+                .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
+        }
+    }
+#endif
 
 /// The File menu's AppKit-side maintenance, attached as its NSMenuDelegate so it re-runs on EVERY
 /// open (a one-shot pass is unreliable — SwiftUI builds the menu lazily and can rebuild it at will;

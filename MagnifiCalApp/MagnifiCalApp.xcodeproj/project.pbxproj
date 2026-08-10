@@ -18,6 +18,7 @@
 		70E6451AC9E8333EE4545419 /* PhoneCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02BDE9796F06C3BE0399496 /* PhoneCalendarView.swift */; };
 		88FC9DC4D1E9901ED2377447 /* year-dense-2026.json in Resources */ = {isa = PBXBuildFile; fileRef = 61E7B91A91A295847A413FBD /* year-dense-2026.json */; };
 		8F01E15DBDD027143974B0BB /* PhoneMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40312066751FD684A47801C /* PhoneMarkdown.swift */; };
+		5AB1E0000000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5AB1E0000000000000000002 /* Sparkle */; };
 		9FBEFB316C1463468E7C3678 /* CalendarUI in Frameworks */ = {isa = PBXBuildFile; productRef = 4621EA362909A0CB306A1505 /* CalendarUI */; };
 		B1AB267A9F80C77C00BCFC97 /* CalendarEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 80D6AD537A21092EBD96D7DE /* CalendarEngine */; };
 		B9DA05E115F5AC57765A91AD /* CalendarEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 3067D902C5A483BC09908066 /* CalendarEngine */; };
@@ -54,6 +55,7 @@
 			files = (
 				9FBEFB316C1463468E7C3678 /* CalendarUI in Frameworks */,
 				B1AB267A9F80C77C00BCFC97 /* CalendarEngine in Frameworks */,
+				5AB1E0000000000000000001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -189,6 +191,7 @@
 			packageProductDependencies = (
 				4621EA362909A0CB306A1505 /* CalendarUI */,
 				80D6AD537A21092EBD96D7DE /* CalendarEngine */,
+				5AB1E0000000000000000002 /* Sparkle */,
 			);
 			productName = CalendarApp;
 			productReference = 9F26929D3FA8206C874AC575 /* CalendarApp.app */;
@@ -224,6 +227,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				045B4F39907B205958D291B9 /* XCLocalSwiftPackageReference "../MagnifiCalKit" */,
+				5AB1E0000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B83179594B26ED5721E390DA /* Products */;
@@ -433,6 +437,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = CalendarApp.entitlements;
+				INFOPLIST_FILE = "Info-macOS.plist";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -462,6 +467,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "CalendarApp-Release.entitlements";
+				INFOPLIST_FILE = "Info-macOS.plist";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -549,7 +555,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		5AB1E0000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		5AB1E0000000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5AB1E0000000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		008CD80ACA456B1AC94892DC /* CalendarRender */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CalendarRender;

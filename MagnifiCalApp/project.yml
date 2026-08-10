@@ -12,6 +12,11 @@ options:
 packages:
   MagnifiCalKit:
     path: ../MagnifiCalKit
+  # Auto-updates for the DIRECT (Developer-ID) build only. The future Mac App Store
+  # variant must drop this dependency — MAS handles updates itself.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    majorVersion: 2.0.0
 
 targets:
   CalendarApp:
@@ -27,6 +32,7 @@ targets:
       # and hand it to both the calendar window and the standalone Calendar AI chat window.
       - package: MagnifiCalKit
         product: CalendarEngine
+      - package: Sparkle
     settings:
       base:
         PRODUCT_NAME: MagnifiCal
@@ -36,6 +42,8 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
+        # Merged with the generated plist: Sparkle's feed URL + EdDSA public key.
+        INFOPLIST_FILE: Info-macOS.plist
         INFOPLIST_KEY_CFBundleDisplayName: MagnifiCal
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         # EventKit (Apple Calendar import): TCC requires a usage string to prompt. The app is NOT

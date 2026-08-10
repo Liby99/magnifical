@@ -50,6 +50,31 @@ Verify the result opens cleanly on a clean Mac:
 spctl -a -vvv -t install build/export/Calendar.app     # → source=Notarized Developer ID
 ```
 
+## Sparkle auto-updates (direct build)
+
+The Developer-ID build updates itself via Sparkle 2 (the Mac App Store variant must
+NOT include Sparkle — drop the package dependency there; the code is `canImport`-gated).
+Feed: `https://github.com/Liby99/magnifical/releases/latest/download/appcast.xml`
+(every release carries the full appcast as an asset, so the `latest` redirect always
+serves the newest one). Sparkle compares `CFBundleVersion` — **bump
+`CURRENT_PROJECT_VERSION` every release**, not just the marketing version.
+
+One-time setup:
+1. Build the app once in Xcode (SPM fetches Sparkle), then run its `generate_keys`
+   (find it: `find ~/Library/Developer/Xcode/DerivedData -name generate_keys`).
+   The private key lands in your login Keychain — export a backup to your password
+   manager; it never enters any repo.
+2. Put the printed PUBLIC key into `Info-macOS.plist` → `SUPublicEDKey` (replacing the
+   placeholder). Without it, Sparkle refuses updates.
+
+Per release (after the DMG is notarized):
+1. Copy the DMG into `build/updates/` (keep older DMGs there — the appcast lists all).
+2. `scripts/make-appcast.sh` — signs entries with the Keychain key, writes
+   `build/updates/appcast.xml`.
+3. Upload BOTH the new DMG and `appcast.xml` as assets of the GitHub release
+   (`gh release create vX.Y.Z build/updates/MagnifiCal-X.Y.Z.dmg build/updates/appcast.xml`).
+Installed apps check daily and offer the update in place; friends never re-download a DMG.
+
 ---
 
 ## Push notifications (realtime sync) — optional for alpha
