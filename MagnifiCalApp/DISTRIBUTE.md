@@ -67,12 +67,18 @@ One-time setup:
 2. Put the printed PUBLIC key into `Info-macOS.plist` → `SUPublicEDKey` (replacing the
    placeholder). Without it, Sparkle refuses updates.
 
-Per release (after the DMG is notarized):
-1. Copy the DMG into `build/updates/` (keep older DMGs there — the appcast lists all).
-2. `scripts/make-appcast.sh` — signs entries with the Keychain key, writes
-   `build/updates/appcast.xml`.
-3. Upload BOTH the new DMG and `appcast.xml` as assets of the GitHub release
-   (`gh release create vX.Y.Z build/updates/MagnifiCal-X.Y.Z.dmg build/updates/appcast.xml`).
+Per release — ONE command does build → appcast → GitHub release:
+```
+native/MagnifiCalApp/scripts/release.sh          # publish (needs gh auth login, once)
+DRY_RUN=1 native/MagnifiCalApp/scripts/release.sh # rehearse everything except the upload
+```
+It runs package.sh, pulls previously released DMGs so the appcast lists every version,
+signs the appcast with the Keychain key, extracts release notes from the CHANGELOG's
+section for this version (fallback: [Unreleased]; edit after with `gh release edit`),
+and publishes the tag with both assets. Preflights refuse: an existing tag, a
+placeholder SUPublicEDKey, or publishing an unnotarized (NOTARIZE=0) build.
+The only manual step stays the VERSION BUMP before running it (see "Versioning &
+changelog"): retitle [Unreleased], bump MARKETING_VERSION and CURRENT_PROJECT_VERSION.
 Installed apps check daily and offer the update in place; friends never re-download a DMG.
 
 ---

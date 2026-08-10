@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
+               BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
                BuildableName = "MagnifiCal.app"
                BlueprintName = "CalendarPhone"
                ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
+            BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
@@ -53,7 +53,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
+            BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
@@ -117,7 +117,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7F70DFAFF3A36484B26A9815"
+            BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
             BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">

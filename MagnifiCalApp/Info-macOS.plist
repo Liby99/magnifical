@@ -2,25 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Sparkle auto-updates (DIRECT Developer-ID build only — the future Mac App Store
-	     build must not link or configure Sparkle; MAS delivers its own updates).
-	     Merged with the generated Info.plist (GENERATE_INFOPLIST_FILE stays YES; the
-	     INFOPLIST_KEY_* build settings still contribute their keys). -->
-
-	<!-- The appcast is published as an asset of EVERY GitHub release, so the stable
-	     /releases/latest/download/ URL always serves the newest one. -->
 	<key>SUFeedURL</key>
 	<string>https://github.com/Liby99/magnifical/releases/latest/download/appcast.xml</string>
-
-	<!-- EdDSA public key. Generate ONCE with Sparkle's `generate_keys` (see
-	     DISTRIBUTE.md); the private half lives in your login Keychain / password
-	     manager and must never enter a repo. Updates won't verify (and Sparkle will
-	     say so) until this placeholder is replaced. -->
 	<key>SUPublicEDKey</key>
-	<string>REPLACE-WITH-PUBLIC-KEY-FROM-generate_keys</string>
-
-	<!-- Check daily without the first-run permission prompt: this app has no telemetry,
-	     and the check downloads only the appcast above. -->
+	<string>vUp5sa0JuX3un0eP1JANH+FOvOPEIpanR3r0S9Xqjk0=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 </dict>
