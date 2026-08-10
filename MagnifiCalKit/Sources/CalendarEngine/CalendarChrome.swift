@@ -5,6 +5,13 @@
 import Foundation
 import Observation
 
+/// Default pinned-panel widths (fraction of the window) before the user drags the split
+/// handle — shared by the engine, the chrome mirrors, and demo mode's deterministic reset.
+public enum DashDefaults {
+    public static let monthFrac: CGFloat = 0.32
+    public static let weekFrac: CGFloat = 0.35
+}
+
 @MainActor
 @Observable
 public final class CalendarChrome {
@@ -19,11 +26,11 @@ public final class CalendarChrome {
     /// Pinned panel widths, mirrored here (observable) so the WebView frame + tab overlays re-lay-out
     /// LIVE while the split handle drags (the engine itself isn't @Observable).
     public internal(set) var dashWeekFrac: CGFloat = {
-        let v = UserDefaults.standard.double(forKey: PrefKeys.dashWeekFrac); return v > 0 ? v : 0.35
+        let v = UserDefaults.standard.double(forKey: PrefKeys.dashWeekFrac); return v > 0 ? v : DashDefaults.weekFrac
     }()
 
     public internal(set) var dashMonthFrac: CGFloat = {
-        let v = UserDefaults.standard.double(forKey: PrefKeys.dashMonthFrac); return v > 0 ? v : 0.25
+        let v = UserDefaults.standard.double(forKey: PrefKeys.dashMonthFrac); return v > 0 ? v : DashDefaults.monthFrac
     }()
 
     /// The event drawer is open — observable mirror of `engine.drawerOpen` (menus gray out

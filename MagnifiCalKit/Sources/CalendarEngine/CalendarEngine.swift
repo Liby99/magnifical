@@ -136,13 +136,13 @@ public final class CalendarEngine {
     public internal(set) var dashPinned = UserDefaults.standard.bool(forKey: PrefKeys.dashPinned)
     /// …and its animated presentation value (0 retracted … 1 out), tweened on toggle.
     public internal(set) var dashPin: CGFloat = UserDefaults.standard.bool(forKey: PrefKeys.dashPinned) ? 1 : 0
-    /// Per-scope pinned panel widths (persisted; defaults month 0.25 < week 0.35 < daily.frac split).
+    /// Per-scope pinned panel widths (persisted; see DashDefaults for the pre-drag defaults).
     public internal(set) var dashWeekFrac: CGFloat = {
-        let v = UserDefaults.standard.double(forKey: PrefKeys.dashWeekFrac); return v > 0 ? v : 0.35
+        let v = UserDefaults.standard.double(forKey: PrefKeys.dashWeekFrac); return v > 0 ? v : DashDefaults.weekFrac
     }()
 
     public internal(set) var dashMonthFrac: CGFloat = {
-        let v = UserDefaults.standard.double(forKey: PrefKeys.dashMonthFrac); return v > 0 ? v : 0.25
+        let v = UserDefaults.standard.double(forKey: PrefKeys.dashMonthFrac); return v > 0 ? v : DashDefaults.monthFrac
     }()
 
     /// ── Weekly-dashboard carousel override (big-fling cruise / catch-freeze / release-settle) ──
@@ -555,6 +555,16 @@ public final class CalendarEngine {
             nowTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.now = Date(); self?.wake() } // refresh the now-line (a render must run)
             }
+        }
+        if Self.isDemoMode {
+            // Recordings are deterministic: never inherit this device's dashboard prefs. The
+            // pin + split widths live in UserDefaults, which CC_DEMO_DATADIR does NOT redirect —
+            // a leaked pin put an already-open panel in the dashboard-tour GIF's first frame.
+            // In-memory only: never write the reset back to the real defaults.
+            dashPinned = false; dashPin = 0
+            dashWeekFrac = DashDefaults.weekFrac; dashMonthFrac = DashDefaults.monthFrac
+            chrome.dashPinned = false; chrome.dashPresented = false
+            chrome.dashWeekFrac = DashDefaults.weekFrac; chrome.dashMonthFrac = DashDefaults.monthFrac
         }
         pushChrome()
         enableCloudSyncIfEntitled()
