@@ -120,6 +120,12 @@ public enum MenuItemID: Sendable {
         case .importMDC: "square.and.arrow.down"
         case .exportMDC: "square.and.arrow.up"
         case .deselectAll: "square.dashed"
+        // Go to Current — one glyph per zoom level's shape: month lanes, month grid,
+        // week columns, the day's hourly timeline.
+        case .goToYear: "calendar"
+        case .goToMonth: "square.grid.3x3"
+        case .goToWeek: "rectangle.split.3x1"
+        case .goToDay: "clock"
         case .todoList: "checklist"
         case .noteEditor: "square.and.pencil"
         case .projList: "chart.bar.doc.horizontal"

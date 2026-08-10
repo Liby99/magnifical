@@ -211,9 +211,11 @@ struct CalendarApp: App {
         @State private var canCheck = false
 
         var body: some View {
-            Button("Check for Updates…") { updater.checkForUpdates() }
-                .disabled(!canCheck)
-                .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
+            Button { updater.checkForUpdates() } label: {
+                Label("Check for Updates…", systemImage: "arrow.down.circle")
+            }
+            .disabled(!canCheck)
+            .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheck = $0 }
         }
     }
 #endif
