@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Which host window a menu action wants to summon (opened differently per shell).
-public enum MenuWindow: Sendable { case assistant, help, settings }
+public enum MenuWindow: Sendable { case assistant, help, settings, changelog }
 
 /// The host-provided hooks the shared actions need. `engine` is a getter (the AppKit shell resolves it
 /// lazily via `CalendarEngine.mainInstance`; the .app captures its live instance).
@@ -61,6 +61,7 @@ public enum MenuWindow: Sendable { case assistant, help, settings }
     case .apiKeys: ctx.open(.settings)
     case .syncNow: ctx.engine()?.refreshConnectivity()
     case .help: ctx.open(.help)
+    case .whatsNew: ctx.open(.changelog)
     case .tutorial: NotificationCenter.default.post(name: .showTutorial, object: nil)
     case .keyboardShortcuts: NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
     case .closeWindow: NSApp.keyWindow?.performClose(nil)

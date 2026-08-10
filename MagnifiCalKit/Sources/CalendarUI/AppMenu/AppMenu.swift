@@ -49,7 +49,7 @@ public enum MenuItemID: Sendable {
     case todoList, noteEditor, projList
     case newConversation, currentConversation, apiKeys
     case syncNow
-    case help, tutorial, keyboardShortcuts, reportProblem
+    case help, tutorial, keyboardShortcuts, whatsNew, reportProblem
     case closeWindow, minimize
 
     public static let appName = "MagnifiCal"
@@ -83,6 +83,7 @@ public enum MenuItemID: Sendable {
         case .help: "\(Self.appName) Help"
         case .tutorial: "Welcome to \(Self.appName)"
         case .keyboardShortcuts: "Keyboard Shortcuts"
+        case .whatsNew: "What's New"
         case .reportProblem: "Report a Problem…"
         case .closeWindow: "Close"
         case .minimize: "Minimize"
@@ -136,6 +137,7 @@ public enum MenuItemID: Sendable {
         case .help: "questionmark.circle"
         case .tutorial: "graduationcap"
         case .keyboardShortcuts: "keyboard"
+        case .whatsNew: "gift"
         case .reportProblem: "ladybug"
         default: nil
         }
@@ -278,10 +280,10 @@ public enum AppMenu {
             .item(.minimize),
         ]))
 
-        // Help — help window, tutorial, shortcut guide, GitHub issue reporter.
+        // Help — help window, tutorial, shortcut guide, changelog window, GitHub issue reporter.
         out.append(MenuSection(.help, "Help", [
             .item(.help), .separator,
-            .item(.tutorial), .item(.keyboardShortcuts), .separator,
+            .item(.tutorial), .item(.keyboardShortcuts), .item(.whatsNew), .separator,
             .item(.reportProblem),
         ]))
 

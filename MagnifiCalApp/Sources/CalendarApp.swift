@@ -162,6 +162,7 @@ struct CalendarApp: App {
                 Divider()
                 MenuActionButton(.tutorial, engine: engine)
                 MenuActionButton(.keyboardShortcuts, engine: engine)
+                OpenChangelogCommand() // "What's New" → the changelog window
                 Divider()
                 MenuActionButton(.reportProblem, engine: engine) // prefilled GitHub issue
             }
@@ -183,6 +184,14 @@ struct CalendarApp: App {
                 }
         }
         .defaultSize(width: 420, height: 640) // slim, chat-only by default (sidebar starts closed)
+        .windowResizability(.contentMinSize)
+
+        // Help ▸ What's New — the curated changelog in its own window (content: ChangelogContent).
+        Window("What's New in MagnifiCal", id: "changelog") {
+            ChangelogView()
+                .onAppear { applyPersistedAppearance() }
+        }
+        .defaultSize(width: 620, height: 640)
         .windowResizability(.contentMinSize)
 
         // The in-app Help browser — its own window (matches the AppKit dev shell's Help ▸ MagnifiCal Help).
@@ -416,6 +425,13 @@ private struct OpenAssistantCommand: View {
 
 /// Help ▸ "MagnifiCal Help" (⌘?) — opens the in-app Help browser window. A dedicated view so
 /// `@Environment(\.openWindow)` resolves inside the command builder (mirrors OpenAssistantCommand).
+private struct OpenChangelogCommand: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button { openWindow(id: "changelog") } label: { menuLabel(.whatsNew) } // "What's New" + gift icon
+    }
+}
+
 private struct OpenHelpCommand: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {

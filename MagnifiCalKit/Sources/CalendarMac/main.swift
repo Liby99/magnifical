@@ -14,6 +14,7 @@ import SwiftUI
     var window: NSWindow!
     var settingsWindow: NSWindow?
     var helpWindow: NSWindow?
+    var changelogWindow: NSWindow?
     /// The menu bar is built from the shared AppMenu spec (CalendarUI), so this dev shell and the Xcode
     /// .app can't drift. The coordinator owns all the menu wiring; we only supply the window/About hosts.
     var menuCoordinator: AppMenuCoordinator!
@@ -173,6 +174,7 @@ import SwiftUI
             open: { [weak self] target in
                 switch target {
                 case .help: self?.showHelp(nil)
+                case .changelog: self?.showChangelog(nil)
                 case .settings: self?.showSettings(nil)
                 case .assistant: break // no assistant window in the dev shell
                 }
@@ -199,6 +201,25 @@ import SwiftUI
             helpWindow = w
         }
         helpWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Help ▸ What's New — open (or focus) the changelog window.
+    @objc func showChangelog(_ sender: Any?) {
+        if changelogWindow == nil {
+            let w = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 620, height: 640),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            w.title = "What's New in MagnifiCal"
+            w.isReleasedWhenClosed = false
+            w.contentView = NSHostingView(rootView: ChangelogView())
+            w.center()
+            changelogWindow = w
+        }
+        changelogWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
