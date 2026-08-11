@@ -136,6 +136,42 @@ public enum TodoIndex {
     /// Tokenize one line of text (the part after a `- [ ] ` marker). Links are masked first so
     /// URL contents can't masquerade as `#`/`@` tokens; each remaining token is stripped from the
     /// text as it's consumed, leaving the human-readable remainder.
+    /// Every `#tag` in a whole note — ANY line, not just todo rows. Tags are markdown tokens
+    /// (`#[A-Za-z0-9_][\w-]*`, so `# Header` with its space never matches); the separate tags
+    /// UI is gone and `rich.tags` is a CACHE recomputed from this. Case-insensitive dedupe,
+    /// first-seen casing, appearance order. Fenced code blocks don't tokenize; links are masked
+    /// by the line tokenizer.
+    public static func noteTags(_ text: String?) -> [String] {
+        guard let text, !text.isEmpty else { return [] }
+        var out: [String] = []
+        var seen = Set<String>()
+        var inFence = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let lead = line.drop(while: { $0 == " " || $0 == "\t" })
+            if lead.hasPrefix("```") || lead.hasPrefix("~~~") {
+                inFence.toggle()
+                continue
+            }
+            if inFence {
+                continue
+            }
+            for t in tokenizeLine(String(line)).tags where seen.insert(t.lowercased()).inserted {
+                out.append(t)
+            }
+        }
+        return out
+    }
+
+    /// A legacy UI-era tag as a markdown token: illegal characters collapse to "-" (the old free-text
+    /// field allowed anything; `#my tag` would otherwise parse as `#my`). nil when nothing survives.
+    public static func tagToken(_ tag: String) -> String? {
+        var s = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.replacingOccurrences(of: "[^A-Za-z0-9_-]+", with: "-", options: .regularExpression)
+        while s.hasPrefix("-") { s.removeFirst() }
+        while s.hasSuffix("-") { s.removeLast() }
+        return s.isEmpty ? nil : s
+    }
+
     public static func tokenizeLine(_ input: String) -> TodoLineTokens {
         var t = TodoLineTokens()
         var text = input

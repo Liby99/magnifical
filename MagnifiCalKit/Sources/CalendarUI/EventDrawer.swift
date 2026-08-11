@@ -262,7 +262,7 @@ public struct PendingDelete: Equatable {
 /// three "when" parts (for bands, start/end are the start/end *day*; deadlines have date + one time).
 public enum DrawerField: Hashable {
     case title, date, start, end, color, config, notes, noteScope, delete
-    case cfgTags, cfgRepeat, cfgPromote,
+    case cfgRepeat, cfgPromote,
          cfgTimezone // controls inside Configuration (only in the cycle while it's open)
     case repEvery, repDays, repUntil, repUntilDate // repeat sub-controls (shown conditionally by kind)
     case promoteLane // the lane picker that appears when Promote is on (timed / deadline)
@@ -281,7 +281,6 @@ extension DrawerField {
         case .notes: "notes"
         case .noteScope: "note scope"
         case .delete: "delete"
-        case .cfgTags: "tags"
         case .cfgRepeat: "repeat"
         case .cfgPromote: "promote / lane"
         case .cfgTimezone: "timezone"
@@ -296,7 +295,7 @@ extension DrawerField {
     /// Is this one of the controls nested inside Configuration? (Escape returns to the config header.)
     var isConfigChild: Bool {
         switch self {
-        case .cfgTags, .cfgRepeat, .cfgPromote, .repEvery, .repDays, .repUntil, .repUntilDate, .promoteLane,
+        case .cfgRepeat, .cfgPromote, .repEvery, .repDays, .repUntil, .repUntilDate, .promoteLane,
              .cfgTimezone: true
         default: false
         }
@@ -423,12 +422,8 @@ struct EventDrawer: View {
     @State private var track = 0
     @State private var hour: CGFloat = 12
     // config
-    @State private var tags: [String] = []
     @State private var rep = Repeat(kind: "none")
     @State private var promote: Int?
-    @State private var addingTag = false
-    @State private var tagDraft = "" // TagInputField self-manages first-responder focus (no @FocusState)
-    @State private var hoveredTag: String? // tag chip under the cursor (hover highlight)
     @State private var configOpen = false // the Configuration disclosure (collapsed by default)
     @State private var notes = "" // series note (all events)
     @State private var occNote = "" // this-occurrence note (recurring)
@@ -582,7 +577,6 @@ struct EventDrawer: View {
                     if ui.drawerFocus?.isConfigChild == true {
                         ui.drawerFocus = .config
                     }
-                    addingTag = false; tagDraft = "" // don't leave the tag input up (it self-focuses on re-expand)
                 }
             }
             .onDisappear { ui.drawerFocus = nil; ui.drawerTitleEditing = false; ui.drawerFieldEditing = false }
@@ -775,7 +769,6 @@ struct EventDrawer: View {
         case .noteScope: return RingSpec(inset: all(-3), radius: 7)
         case .delete: return RingSpec(inset: all(-4), radius: 7)
         // Configuration children (rings sit on the inner controls)
-        case .cfgTags: return RingSpec(inset: all(-3), radius: 7)
         case .cfgRepeat: return RingSpec(inset: all(-3), radius: 7)
         case .repEvery: return RingSpec(inset: all(-3), radius: 7)
         case .repDays: return RingSpec(inset: all(-3), radius: 7)
@@ -838,10 +831,6 @@ struct EventDrawer: View {
             if action == .activate {
                 withAnimation(.easeInOut(duration: 0.2)) { configOpen.toggle() }
             }
-        case .cfgTags:
-            if action == .activate {
-                endWhenEdit(); addingTag = true
-            } // show the input (it self-focuses on appear)
         case .cfgRepeat:
             if action == .left {
                 cycleRepeat(-1)
@@ -959,15 +948,14 @@ struct EventDrawer: View {
     private var configBox: some View {
         DisclosureGroup(isExpanded: $configOpen) {
             VStack(alignment: .leading, spacing: 0) {
-                configItem("Tags") { tagsControls.drawerRingAnchor(.cfgTags) }
+                // (Tags have no UI row here: they're markdown — type #tokens into the note itself.)
                 // Imported events have NO Repeat section: recurrence is configured in the source
                 // calendar app (Apple Calendar / Google / Outlook), which expands occurrences for
-                // us — a local rule would fight the vendor's. (Tags/promote stay: local overlays.)
+                // us — a local rule would fight the vendor's. (Promote stays: a local overlay.)
                 if !imported {
-                    configDivider
                     configItem("Repeat") { repeatControls } // rings live on each repeat sub-control
+                    configDivider
                 }
-                configDivider
                 configItem(kind == .band ? "Lane" : "Promote") { laneOrPromoteControls } // rings live on each control
                 if kind != .band { // bands are all-day → timezone-irrelevant
                     configDivider
@@ -1260,63 +1248,6 @@ struct EventDrawer: View {
     }
 
     /// ── Tags ──────────────────────────────────────────────────────────────────────
-    private var tagsControls: some View {
-        FlowLayout(spacing: 6, lineSpacing: 6) {
-            ForEach(tags, id: \.self) { t in tagChip(t) }
-            if addingTag {
-                // A raw NSTextField (via TagInputField) so we can catch Delete/Backspace on an EMPTY
-                // input to remove the previous tag — SwiftUI's TextField swallows that key itself.
-                TagInputField(
-                    text: $tagDraft,
-                    onSubmit: addTag,
-                    onCancel: { addingTag = false; tagDraft = ""; refocus() }, // Esc → back to the cfgTags ring
-                    onDeleteWhenEmpty: {
-                        if let last = tags.last {
-                            removeTag(last)
-                        }
-                    } // Delete on empty → drop last tag
-                )
-                .font(.caption).frame(width: 56)
-                .padding(.horizontal, 9).padding(.vertical, 3)
-                .overlay(dashedPill)
-            } else {
-                Button { endWhenEdit(); addingTag = true } label: {
-                    Text("+ Tag").font(.caption)
-                        .padding(.horizontal, 9).padding(.vertical, 3)
-                        .overlay(dashedPill)
-                }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Dashed pill outline for the "+ Tag" affordance (and its inline input), matching the web.
-    private var dashedPill: some View {
-        Capsule().strokeBorder(theme.text.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-    }
-
-    private func tagChip(_ t: String) -> some View {
-        let hovered = hoveredTag == t
-        return HStack(spacing: 3) {
-            Text("#\(t)").font(.caption)
-            Button { removeTag(t) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
-                .buttonStyle(.plain)
-                .opacity(hovered ? 0.9 : 0.4) // the × steps forward on hover
-        }
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(theme.text.opacity(hovered ? 0.16 : 0.08), in: Capsule())
-        .foregroundStyle(theme.text)
-        .onHover {
-            h in if h {
-                hoveredTag = t
-            } else if hoveredTag == t {
-                hoveredTag = nil
-            }
-        }
-        .animation(.easeOut(duration: 0.12), value: hovered)
-    }
-
     /// ── Repeat ────────────────────────────────────────────────────────────────────
     private var repeatControls: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1702,19 +1633,6 @@ struct EventDrawer: View {
         )
     }
 
-    /// ── Tags logic ────────────────────────────────────────────────────────────────
-    private func addTag() {
-        let t = tagDraft.trimmingCharacters(in: .whitespaces).drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)
-        if !t.isEmpty, !tags.contains(t) {
-            tags.append(t); engine.setTags(id, tags)
-        }
-        tagDraft = "" // keep adding — the input stays up and holds focus
-    }
-
-    private func removeTag(_ t: String) {
-        endWhenEdit(); tags.removeAll { $0 == t }; engine.setTags(id, tags)
-    }
-
     /// ── Date helpers ────────────────────────────────────────────────────────────────
     private func makeDate(_ year: Int, _ month0: Int, _ d: Int) -> Date {
         var c = DateComponents(); c.year = year; c.month = month0 + 1; c.day = d; c.hour = 12
@@ -1756,7 +1674,6 @@ struct EventDrawer: View {
         } else {
             onClose(); return
         }
-        tags = engine.richTags(id)
         rep = engine.repeatConfig(id) ?? Repeat(kind: "none")
         promote = engine.promoteTrack(id)
         // Context menu's "Repeat…": arrive with Configuration already expanded.
@@ -1806,7 +1723,6 @@ struct EventDrawer: View {
         case .deadline: [.title, .date, .start, .color, .config] // start = the time
         }
         if configOpen {
-            order.append(.cfgTags)
             // Imported events have no Repeat section (vendor-owned recurrence) — keep the Tab
             // cycle in lockstep with configBox.
             if !imported {
@@ -1880,86 +1796,6 @@ struct EventDrawer: View {
         case .band: engine.updateBand(id) { $0.color = v }
         case .deadline: engine.updateDeadline(id) { $0.color = v }
         }
-    }
-}
-
-/// ── Tag input (raw NSTextField) ──────────────────────────────────────────────────
-/// A single-line text field for entering a tag. It behaves like a plain SwiftUI TextField but also
-/// reports three commands the field editor would otherwise eat silently:
-///   • Return                      → onSubmit (add the tag)
-///   • Escape                      → onCancel (stop adding)
-///   • Delete/Backspace when EMPTY → onDeleteWhenEmpty (remove the previous tag)
-/// SwiftUI's TextField gives us no hook for the last one (it consumes backspace-on-empty), so we drop
-/// to AppKit and intercept `deleteBackward:` in the delegate. Self-focuses when it enters the window.
-private struct TagInputField: NSViewRepresentable {
-    @Binding var text: String
-    var onSubmit: () -> Void
-    var onCancel: () -> Void
-    var onDeleteWhenEmpty: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let tf = FocusOnAppearField()
-        tf.delegate = context.coordinator
-        tf.isBordered = false
-        tf.drawsBackground = false
-        tf.focusRingType = .none
-        tf.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-        tf.placeholderString = "tag"
-        tf.cell?.usesSingleLineMode = true
-        tf.cell?.wraps = false
-        tf.cell?.isScrollable = true
-        tf.stringValue = text
-        return tf
-    }
-
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        context.coordinator.parent = self
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: TagInputField
-        init(_ p: TagInputField) {
-            parent = p
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            if let tf = obj.object as? NSTextField {
-                parent.text = tf.stringValue
-            }
-        }
-
-        /// The field editor routes special keys here as commands — intercept the three we care about.
-        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-            switch selector {
-            case #selector(NSResponder.insertNewline(_:)): parent.onSubmit(); return true
-            case #selector(NSResponder.cancelOperation(_:)): parent.onCancel(); return true
-            case #selector(NSResponder.deleteBackward(_:)):
-                if textView.string.isEmpty {
-                    parent.onDeleteWhenEmpty(); return true
-                } // empty → drop last tag
-                return false // otherwise let it delete a character normally
-            default: return false
-            }
-        }
-    }
-}
-
-/// An NSTextField that grabs first responder once, when it's first placed in a window (so the tag
-/// input is ready to type in the moment it appears).
-private final class FocusOnAppearField: NSTextField {
-    private var didFocus = false
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard !didFocus, let w = window else { return }
-        didFocus = true
-        DispatchQueue.main.async { [weak self] in guard let self else { return }; w.makeFirstResponder(self) }
     }
 }
 

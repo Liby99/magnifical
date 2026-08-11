@@ -601,6 +601,7 @@ public final class CalendarEngine {
             if let names = s.monthTrackNames, names.count == 12, names.allSatisfy({ $0.count == 4 }) {
                 items.trackNames = names
             }
+            migrateTagsIntoNotes() // UI-era tags → #tokens in the note; rich.tags becomes a cache
         } else {
             persistNow() // seed the store on first open of this calendar
         }

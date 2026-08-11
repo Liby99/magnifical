@@ -371,8 +371,12 @@ extension CalendarEngine {
         schedulePersist()
     }
 
+    /// Tags are markdown: ensure the note carries a `#token` for each tag, then resync the
+    /// cache (rich.tags is derived from the note — a direct field write would be overwritten
+    /// on the next note save). Additive: removing a tag means editing the note text.
     public func setTags(_ id: String, _ tags: [String]) {
-        mutateRich(overlayKey(id)) { $0.tags = tags }
+        mutateRich(overlayKey(id)) { $0.notes = Self.appendingMissingTags(tags, to: $0.notes) }
+        syncTagCache(overlayKey(id))
     }
 
     public func setPromoteTrack(_ id: String, _ t: Int?) {

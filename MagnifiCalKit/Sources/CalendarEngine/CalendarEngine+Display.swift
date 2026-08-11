@@ -743,11 +743,60 @@ extension CalendarEngine {
         Repeat.parse(items.richById[overlayKey(id)]?.repeatJSON)
     }
 
+    /// ── Tags are markdown ─────────────────────────────────────────────────────────────
+    /// `rich.tags` is a CACHE of the note's `#tokens` (the drawer's tags UI is gone): recompute it
+    /// whenever the note changes. Vendor-imported items keep the system "imported" tag (it isn't
+    /// note-authored), and only their USER-typed postfix mints tags — a vendor description's
+    /// stray "#word" must not become one. Bumps editGen only when the set actually changed:
+    /// tag-keyed consumers (filter universe, visibility) are display caches, but plain note
+    /// keystrokes must stay off the display-cache path (the setNotes noteGen rule).
+    func syncTagCache(_ key: String) {
+        guard var rf = items.richById[key] else { return }
+        let body = rf.source == "manual" ? (rf.notes ?? "") : ManagedNote.splitNote(rf.notes).user
+        var tags = TodoIndex.noteTags(body)
+        if rf.source != "manual", rf.tags.contains("imported"), !tags.contains("imported") {
+            tags.append("imported")
+        }
+        guard rf.tags != tags else { return }
+        rf.tags = tags
+        items.richById[key] = rf
+        caches.editGen &+= 1
+    }
+
+    /// Idempotent tags→markdown migration + cache heal, run on every store load: any UI-era tag
+    /// missing from its note is appended as a `#token` line (never the system "imported" tag),
+    /// then every cache is recomputed from the notes — which also heals divergence from code
+    /// paths that wrote notes without syncing.
+    func migrateTagsIntoNotes() {
+        var appended = false
+        for (key, rf) in items.richById where !rf.tags.isEmpty {
+            let body = rf.source == "manual" ? (rf.notes ?? "") : ManagedNote.splitNote(rf.notes).user
+            let present = Set(TodoIndex.noteTags(body).map { $0.lowercased() })
+            let missing = rf.tags
+                .filter { !(rf.source != "manual" && $0.lowercased() == "imported") }
+                .compactMap { TodoIndex.tagToken($0) }
+                .filter { !present.contains($0.lowercased()) }
+            guard !missing.isEmpty else { continue }
+            var rf2 = rf
+            let line = missing.map { "#" + $0 }.joined(separator: " ")
+            rf2.notes = (rf.notes?.isEmpty == false) ? rf.notes! + "\n\n" + line : line
+            items.richById[key] = rf2
+            appended = true
+        }
+        for key in items.richById.keys {
+            syncTagCache(key)
+        }
+        if appended {
+            schedulePersist()
+        }
+    }
+
     public func setNotes(_ id: String, _ v: String) {
         let key = overlayKey(id)
         var rf = items.richById[key] ?? RichFields()
         guard rf.notes != v else { return }
         rf.notes = v; items.richById[key] = rf
+        syncTagCache(key) // tags live IN the markdown; rich.tags is a cache of the note's #tokens
         // NOT in the calendar undo stack: notes are edited in the drawer's CodeMirror, which owns its
         // own undo (Cmd+Z while it's focused). Recording here would let its internal undo re-post the
         // note and pollute the calendar stack. Matches the web (notes are a separate lower layer).

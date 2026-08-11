@@ -55,7 +55,9 @@ extension CalendarEngine {
             rf.notes = notes
         }
         if !tags.isEmpty {
-            rf.tags = tags
+            // Tags are markdown: write them INTO the note as #tokens (rich.tags is a cache
+            // recomputed below — an assistant-set tag must survive the next note save).
+            rf.notes = Self.appendingMissingTags(tags, to: rf.notes)
         }
         if let promoteTrack {
             rf.promoteTrack = max(0, min(3, promoteTrack))
@@ -64,6 +66,7 @@ extension CalendarEngine {
             rf.createdByAI = true
         }
         items.richById[id] = rf
+        syncTagCache(id)
     }
 
     @discardableResult
@@ -290,7 +293,9 @@ extension CalendarEngine {
                     rf.notes = notes
                 }
                 if let tags {
-                    rf.tags = tags
+                    // Tags are markdown (see setRich): ADD the requested tags as #tokens in the
+                    // note; removing one means editing the note text, which stays the user's move.
+                    rf.notes = Self.appendingMissingTags(tags, to: rf.notes)
                 }
                 if clearPromote {
                     rf.promoteTrack = nil
@@ -301,10 +306,23 @@ extension CalendarEngine {
                     rf.createdByAI = true
                 }
                 items.richById[id] = rf
+                syncTagCache(id)
             }
         }
         commitTxn()
         return found
+    }
+
+    /// Append `#token`s for any of `tags` the note doesn't already carry (case-insensitive; UI-era
+    /// characters sanitized by tagToken). Shared by the assistant's create/update paths — the
+    /// markdown is the tag source of truth, so a tag that isn't in the note doesn't exist.
+    static func appendingMissingTags(_ tags: [String], to notes: String?) -> String? {
+        let present = Set(TodoIndex.noteTags(notes).map { $0.lowercased() })
+        let missing = tags.compactMap { TodoIndex.tagToken($0) }
+            .filter { !present.contains($0.lowercased()) }
+        guard !missing.isEmpty else { return notes }
+        let line = missing.map { "#" + $0 }.joined(separator: " ")
+        return (notes?.isEmpty == false) ? notes! + "\n\n" + line : line
     }
 
     /// The (year, month0, day) an item sits on — for the auditor's trusted date context.

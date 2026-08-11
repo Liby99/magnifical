@@ -94,6 +94,7 @@ struct MarkdownPreview: NSViewRepresentable {
             tv.codeBG = base.withAlphaComponent(0.055)
             tv.quoteBG = base.withAlphaComponent(0.035)
             tv.quoteBar = NSColor(Theme.accent).withAlphaComponent(0.55)
+            tv.ruleColor = NSColor(parent.theme.accentGrey).withAlphaComponent(0.6)
             tv.managedBar = NSColor(Theme.accent).withAlphaComponent(0.55)
             tv.onCmdClickLine = parent.onLineEdit
             tv.textStorage?.setAttributedString(doc.string)
@@ -259,6 +260,7 @@ final class PreviewTextView: NSTextView {
     var codeBG: NSColor = .black.withAlphaComponent(0.055)
     var quoteBG: NSColor = .black.withAlphaComponent(0.035)
     var quoteBar: NSColor = .systemRed
+    var ruleColor: NSColor = .separatorColor // markdown --- / === divider lines
     var managedBar: NSColor = .systemRed // imported managed-block left border (accent 55%)
 
     override func draw(_ dirtyRect: NSRect) {
@@ -286,6 +288,11 @@ final class PreviewTextView: NSTextView {
                     rightRounded(r, radius: 7).fill()
                     quoteBar.setFill()
                     NSRect(x: r.minX, y: r.minY, width: 3, height: r.height).fill()
+                case .rule:
+                    // The web's hr: a 1px accent-grey line across the pane.
+                    ruleColor.setFill()
+                    NSRect(x: r.minX, y: r.midY - 0.5,
+                           width: max(0, bounds.width - r.minX - 6), height: 1).fill()
                 case .managed:
                     // Imported "managed block" (the web drawer's .cc-dw-mi): a 2px accent bar
                     // down the region's left edge — content is indented past it by the
@@ -331,7 +338,7 @@ final class PreviewTextView: NSTextView {
 // ── The document builder ─────────────────────────────────────────────────────────────────────
 
 enum MarkdownDoc {
-    enum DecorKind { case code, quote, managed }
+    enum DecorKind { case code, quote, managed, rule }
 
     struct Rendered {
         let string: NSAttributedString
@@ -474,6 +481,24 @@ enum MarkdownDoc {
             }
             if line.isEmpty {
                 flushText()
+                continue
+            }
+
+            // Divider: a line of only --- (or ===, *** , ___; 3+): a thin horizontal rule
+            // drawn by the text view (custom decor — a text-block border can't span the pane).
+            if line.count >= 3,
+               line.allSatisfy({ $0 == "-" }) || line.allSatisfy({ $0 == "=" })
+               || line.allSatisfy({ $0 == "*" }) || line.allSatisfy({ $0 == "_" }) {
+                flushText()
+                let from = out.length
+                let para = paragraph(spacing: 9)
+                para.minimumLineHeight = 11 // a slim strip for the rule to center in
+                para.maximumLineHeight = 11
+                out.append(NSAttributedString(string: "\u{00A0}\n", attributes: [
+                    .font: NSFont.systemFont(ofSize: 4), .paragraphStyle: para,
+                ]))
+                decor.append((NSRange(location: from, length: out.length - from), .rule))
+                mark(from, line: srcLine)
                 continue
             }
 

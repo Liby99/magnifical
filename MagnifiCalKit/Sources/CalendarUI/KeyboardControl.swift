@@ -368,8 +368,6 @@ enum AppKeyState: Equatable {
                 b.append(KeyBinding(.right, "Next color") { ui.postDrawer(.right) })
             case .config:
                 b.append(KeyBinding(.enter, "Expand / collapse") { ui.postDrawer(.activate) })
-            case .cfgTags:
-                b.append(KeyBinding(.enter, "Add tag") { ui.postDrawer(.activate) })
             case .cfgRepeat:
                 b.append(KeyBinding(.left, "Prev") { ui.postDrawer(.left) })
                 b.append(KeyBinding(.right, "Next") { ui.postDrawer(.right) })

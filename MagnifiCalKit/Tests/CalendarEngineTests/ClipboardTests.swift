@@ -31,7 +31,8 @@ final class ClipboardTests: XCTestCase {
 
         let copy = try XCTUnwrap(e.clipPayload(of: id, full: false))
         XCTAssertEqual(copy.title, "Standup"); XCTAssertEqual(copy.color, "blue")
-        XCTAssertEqual(copy.notes, "daily"); XCTAssertEqual(copy.tags, ["work"])
+        XCTAssertEqual(copy.notes, "daily\n\n#work", "tags live in the note as #tokens")
+        XCTAssertEqual(copy.tags, ["work"], "…and rich.tags mirrors them as a cache")
         XCTAssertEqual(Double(copy.durationHours), 2, accuracy: 0.001)
         XCTAssertNil(copy.move) // repeat + promotion dropped for a plain copy
 

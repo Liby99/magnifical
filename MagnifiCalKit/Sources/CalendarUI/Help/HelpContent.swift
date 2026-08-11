@@ -360,7 +360,7 @@ public enum HelpContent {
             keywords: ["edit", "drawer", "change", "title", "time", "color", "details"],
             blocks: [
                 .paragraph(
-                    "Double-click any event to open its drawer on the right. There you can change the title, date and time, color, tags, repeat rule, and notes. Changes save as you make them."
+                    "Double-click any event to open its drawer on the right. There you can change the title, date and time, color, repeat rule, and notes. Changes save as you make them."
                 ),
                 .tip(
                     "A single click selects an event (and lets you type a new title); double-click opens the full drawer."
@@ -465,11 +465,11 @@ public enum HelpContent {
         ),
         HelpTopic(
             id: "tags", title: "Tag your events",
-            summary: "Add tags in the drawer to label and find events.",
+            summary: "Tag events by typing #tags in their notes.",
             keywords: ["tags", "labels", "categorize", "hashtag", "filter"],
             blocks: [
                 .paragraph(
-                    "Add tags to an event under Configuration in its drawer. Tags are searchable — type a tag in the search bar (⌘F) to pull up everything you've labeled that way."
+                    "Tags are markdown: type #tag anywhere in an event's note (letters, digits, - and _ — a space after # makes a heading instead). They render as chips in the preview, and they're searchable — type a tag in the search bar (⌘F) to pull up everything you've labeled that way."
                 ),
                 .paragraph(
                     "To declutter the calendar by tag, open the tag filter (the tag button in the toolbar, View ▸ Filter by Tags…, or ⌘G) and un-check the tags you want hidden. An event stays visible while ANY of its tags is still on."
@@ -698,7 +698,7 @@ public enum HelpContent {
                         "MagnifiCal can display events from the macOS Calendar app so everything sits in one place. Turn it on and pick which calendars to include in Settings ▸ Account."
                     ),
                     .paragraph(
-                        "Imported events are read-only — edit them in Calendar.app — but you can still add your own notes, tags, and track placement to them here."
+                        "Imported events are read-only — edit them in Calendar.app — but you can still add your own notes (with #tags), and track placement to them here."
                     ),
                 ]
             ),
