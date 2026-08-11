@@ -2,7 +2,7 @@
 // list (event notes / daily / weekly / monthly notes), which COLLECTIONS (sections) render, and
 // whether the deadlines section shows. One prefs value per dashboard scope, persisted together
 // in UserDefaults and pushed to the dashboard WebView as JSON (CK.setTodoPrefs); the section and
-// source KEYS are mirrored in webeditor/dashboard.ts — keep the two in sync.
+// (source KEYS once mirrored the retired webview dashboard's; now native-only.)
 //
 // The menu (Display Deadlines / Show Collections ▸ / Collect from… ▸) is single-sourced from the
 // catalog below and built as ONE AppKit NSMenu, popped from both entry points: the cog button at

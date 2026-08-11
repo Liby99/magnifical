@@ -38,8 +38,7 @@ let package = Package(
         .target(name: "CalendarEngine", dependencies: ["CalendarGeometry"]),
         .target(name: "CalendarRender", dependencies: ["CalendarGeometry", "CalendarEngine"]),
         .target(name: "CalendarUI", dependencies: ["CalendarGeometry", "CalendarEngine", "CalendarRender"],
-                resources: [.copy("Resources/editor"), // bundled WKWebView notes editor (see webeditor/)
-                            .copy("Resources/tutorial")]), // onboarding carousel GIFs (see TutorialView)
+                resources: [.copy("Resources/tutorial")]), // onboarding carousel GIFs (see TutorialView)
         .executableTarget(name: "CalendarMac", dependencies: ["CalendarUI"]),
         .executableTarget(name: "AssistantEvalRunner", dependencies: ["CalendarUI"]),
         .testTarget(name: "CalendarGeometryTests", dependencies: ["CalendarGeometry"]),

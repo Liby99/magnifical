@@ -1,6 +1,0 @@
-{
-  "name": "calendarkit-webeditor",
-  "private": true,
-  "description": "Standalone CodeMirror + remark/KaTeX notes editor bundled for the native drawer's WKWebView.",
-  "dependencies": { "rehype-stringify": "^10.0.0" }
-}
