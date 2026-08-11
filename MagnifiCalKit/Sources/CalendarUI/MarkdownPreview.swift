@@ -352,6 +352,18 @@ enum MarkdownDoc {
         .systemFont(ofSize: bodySize, weight: weight)
     }
 
+    /// CommonMark ATX heading: 1–6 `#`s followed by a space/tab (or nothing — `##` alone is a
+    /// valid empty heading). `#tag` — no space — is NOT a heading (same rule as the tag grammar
+    /// and the live editor's `^#{1,6} ` highlighter): it falls through to prose, where the chip
+    /// renderer picks it up. Before this check, `#some-long-tag` at line start rendered as
+    /// an h1 instead of a tag chip.
+    static func isAtxHeading(_ line: String) -> Bool {
+        let hashes = line.prefix(while: { $0 == "#" })
+        guard (1 ... 6).contains(hashes.count) else { return false }
+        let after = line.dropFirst(hashes.count)
+        return after.isEmpty || after.first == " " || after.first == "\t"
+    }
+
     static func headingFont(_ level: Int) -> NSFont {
         switch level {
         case 1: .systemFont(ofSize: 19, weight: .bold)
@@ -531,7 +543,7 @@ enum MarkdownDoc {
                 appendTodo(rest, done: done, line: srcLine, indent: indentDepth(raw),
                            to: &out, base: base, accent: accent, interactive: interactive)
                 mark(from, line: srcLine)
-            } else if line.hasPrefix("#") {
+            } else if isAtxHeading(line) {
                 flushText()
                 let from = out.length
                 let level = line.prefix(while: { $0 == "#" }).count

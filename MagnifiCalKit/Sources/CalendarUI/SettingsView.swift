@@ -349,10 +349,9 @@ private struct CalendarFeedList: View {
             }
             ForEach(shown, id: \.self) { url in
                 HStack(spacing: 8) {
-                    Image(systemName: "link").font(.caption).foregroundStyle(.secondary)
+                    colorPicker(url, theme) // leads the row: the feed's default color at a glance
                     Text(feedTitle(url)).font(.callout).lineLimit(1)
                     Spacer(minLength: 10)
-                    colorPicker(url, theme)
                     Button("Remove") {
                         ICSFeeds.remove(url, calendarId: calId)
                         feeds = ICSFeeds.list(calendarId: calId)
@@ -400,7 +399,9 @@ private struct CalendarFeedList: View {
                 }
             }
         } label: {
-            Circle().fill(theme.eventBorder(current)).frame(width: 12, height: 12)
+            // A bitmap, not a Shape: borderless menu labels drop shape views (only the
+            // chevron survived) — an NSImage swatch always renders, like the item swatches.
+            Image(nsImage: Self.swatchImage(theme.eventBorder(current)))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
