@@ -112,6 +112,16 @@ public enum PrefKeys {
     public static func icsFeedName(_ feedKey: String) -> String {
         "cc.icsfeed.name.\(feedKey)"
     }
+
+    /// The feed's DEFAULT event color (a palette key): every imported item without a per-item
+    /// override displays in this color, and changing it re-colors those items. Assigned by
+    /// cycling the palette when a feed is subscribed (see ICSFeedColors).
+    public static func icsFeedColor(_ feedKey: String) -> String {
+        "cc.icsfeed.color.\(feedKey)"
+    }
+
+    /// The palette-cycling cursor for new-subscription default colors.
+    public static let icsFeedColorCursor = "cc.icsfeed.colorCursor"
     /// The active calendar id as seen from UserDefaults — for the separate Settings window, which has no
     /// engine reference. The engine itself uses `registry.activeId` (authoritative); both resolve equal.
     public static var currentCalendarId: String {

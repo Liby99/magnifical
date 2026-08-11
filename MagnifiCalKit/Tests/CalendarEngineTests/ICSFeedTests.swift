@@ -132,6 +132,46 @@ final class ICSFeedTests: XCTestCase {
         XCTAssertNil(op.editURL)
     }
 
+    /// Per-feed DEFAULT colors: new subscriptions cycle the palette; an item without a per-item
+    /// override follows the feed default (so a Settings change propagates to it), while an item
+    /// the user recolored (colorOverride — the "changed" bit) stays pinned.
+    func testFeedDefaultColorsCycleAndPropagate() throws {
+        redirectStoreToTemp()
+        let u1 = "https://calendar.google.com/calendar/ical/one/private-a/basic.ics"
+        let u2 = "https://outlook.live.com/owa/calendar/two/b/calendar.ics"
+        let (k1, k2) = (ICSFeedKey.feedKey(u1), ICSFeedKey.feedKey(u2))
+        let d = UserDefaults.standard
+        defer {
+            unsetenv("CC_DEMO_DATADIR")
+            d.removeObject(forKey: PrefKeys.icsFeedColor(k1))
+            d.removeObject(forKey: PrefKeys.icsFeedColor(k2))
+            d.removeObject(forKey: PrefKeys.icsFeedColorCursor)
+        }
+        d.removeObject(forKey: PrefKeys.icsFeedColor(k1))
+        d.removeObject(forKey: PrefKeys.icsFeedColor(k2))
+        d.set(0, forKey: PrefKeys.icsFeedColorCursor)
+
+        let palette = EVENT_COLORS.filter { $0 != "default" }
+        ICSFeedColors.assignIfNeeded(url: u1)
+        ICSFeedColors.assignIfNeeded(url: u2)
+        ICSFeedColors.assignIfNeeded(url: u1) // idempotent — no re-roll
+        XCTAssertEqual(ICSFeedColors.color(forKey: k1), palette[0], "first subscription: first color")
+        XCTAssertEqual(ICSFeedColors.color(forKey: k2), palette[1], "second subscription: next color")
+
+        // Effective color: feed default when untouched, override when the user picked one.
+        let e = CalendarEngine()
+        let ev = TimedEvent(id: "gcal-\(k1)-uid1-20260810-0900", year: 2026, month: 7, day: 10,
+                            startHour: 9, endHour: 10, title: "Standup", color: "default",
+                            anchorTz: DeadlineTZ.concrete("auto"))
+        XCTAssertEqual(e.importedDisplayColor(ev), palette[0])
+        ICSFeedColors.set("green", forKey: k1) // Settings change → untouched items follow
+        XCTAssertEqual(e.importedDisplayColor(ev), "green")
+        e.items.richById["gcal-\(k1)-uid1"] = RichFields(colorOverride: "red") // user pinned this one
+        XCTAssertEqual(e.importedDisplayColor(ev), "red", "per-item override beats the feed default")
+        XCTAssertNil(CalendarEngine.feedDefaultColor("apple-uid-20260810-0900"),
+                     "Apple imports keep their vendor colors")
+    }
+
     /// Provider recognition from a feed URL's host — drives banner labels + Settings rows.
     func testFeedProviderLabels() {
         XCTAssertEqual(ICSFeedProvider.label(forURL: "https://calendar.google.com/calendar/ical/a/private-b/basic.ics"),

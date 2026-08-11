@@ -166,9 +166,19 @@ extension CalendarEngine {
     func hasUserOverlay(_ rf: RichFields) -> Bool {
         Self.hasUserOverlay(rf)
     } // internal: +AppleImport
-    /// An imported event's effective color: the user's series-level override, else the vendor calendar's.
+    /// An imported event's effective color: the user's series-level override, else the FEED's
+    /// default color (Settings ▸ Account, per subscribed calendar), else the vendor calendar's.
+    /// The override IS the "user changed this one" bit — items without it follow the feed default,
+    /// so changing the default in Settings propagates exactly to the untouched items.
     func importedDisplayColor(_ e: TimedEvent) -> String { // internal: +AppleImport
-        items.richById[Self.appleSeriesKey(e.id)]?.colorOverride ?? e.color
+        items.richById[Self.appleSeriesKey(e.id)]?.colorOverride
+            ?? Self.feedDefaultColor(e.id) ?? e.color
+    }
+
+    /// The band twin of importedDisplayColor (imported all-day events).
+    func importedBandDisplayColor(_ b: BandEvent) -> String {
+        items.richById[Self.appleSeriesKey(b.id)]?.colorOverride
+            ?? Self.feedDefaultColor(b.id) ?? b.color
     }
 
     /// ── View ▸ Filter by Tags (ported from the web's "Tag Filter" flyout) ──────────────────────
@@ -400,7 +410,9 @@ extension CalendarEngine {
             if userHidden && !revealHidden {
                 continue
             } // user hid this series → hidden unless "Show Hidden" is on
-            out.append(b)
+            var bv = b
+            bv.color = importedBandDisplayColor(b) // user override / feed default, like timed events
+            out.append(bv)
             var bg = badges(b.id, recurrent: false, promoted: false)
             if userHidden {
                 bg.insert(.hidden)

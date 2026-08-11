@@ -14,6 +14,36 @@ public extension Notification.Name {
     /// Posted after a fetch stores a feed's display name (X-WR-CALNAME) → Settings re-renders its
     /// feed rows. Deliberately distinct from icsFeedsChanged, which would re-trigger the import.
     static let icsFeedNamesChanged = Notification.Name("cc.icsFeeds.namesChanged")
+    /// Posted by Settings when a feed's DEFAULT color changes → the calendar re-colors the feed's
+    /// items that carry no per-item override (CalendarView bumps the display caches).
+    static let icsFeedColorsChanged = Notification.Name("cc.icsFeeds.colorsChanged")
+}
+
+/// Per-feed DEFAULT event colors. Every imported item from a feed shows the feed's color unless
+/// the user picked one for that item (the rich colorOverride — that override is the "changed"
+/// bit, so default-color changes propagate exactly to the untouched items). Stored in
+/// UserDefaults by feed key; new subscriptions cycle through the palette.
+public enum ICSFeedColors {
+    /// The stored default for a feed key, if one has been assigned.
+    public static func color(forKey feedKey: String) -> String? {
+        UserDefaults.standard.string(forKey: PrefKeys.icsFeedColor(feedKey))
+    }
+
+    public static func set(_ color: String, forKey feedKey: String) {
+        UserDefaults.standard.set(color, forKey: PrefKeys.icsFeedColor(feedKey))
+    }
+
+    /// First-time assignment: cycle the real palette ("default" excluded) so each new
+    /// subscription lands on a fresh color. Idempotent for feeds that already have one.
+    public static func assignIfNeeded(url: String) {
+        let key = ICSFeedKey.feedKey(url)
+        guard color(forKey: key) == nil else { return }
+        let palette = EVENT_COLORS.filter { $0 != "default" }
+        let d = UserDefaults.standard
+        let cursor = d.integer(forKey: PrefKeys.icsFeedColorCursor)
+        d.set(palette[cursor % palette.count], forKey: PrefKeys.icsFeedColor(key))
+        d.set(cursor + 1, forKey: PrefKeys.icsFeedColorCursor)
+    }
 }
 
 /// Stable 10-hex key for a feed URL — the id-prefix its items live under. (The URL list itself
@@ -64,6 +94,7 @@ extension CalendarEngine {
         guard !urls.isEmpty else { return }
         for url in urls { // Edit-original links + provenance labels resolve the feed by its key
             icsFeedByKey[ICSFeedKey.feedKey(url)] = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            ICSFeedColors.assignIfNeeded(url: url) // pre-existing subscriptions get a color too
         }
         // Feeds are PER MagnifiCal calendar: a fetch started on one calendar must never merge into
         // another (the user can switch while a slow fetch is in flight).
@@ -143,6 +174,23 @@ public struct ImportedProvenance: Sendable {
     public let label: String // "Apple Calendar" / "Google Calendar" / "Calendar Feed"
     public let editURL: URL? // deep link to the original event, when derivable
     public let editHelp: String // the Edit-original button's tooltip
+}
+
+extension CalendarEngine {
+    /// The feed's default color for a gcal box id — nil for Apple/local ids or unassigned feeds.
+    static func feedDefaultColor(_ id: String) -> String? {
+        guard id.hasPrefix("gcal-") else { return nil }
+        let key = String(id.dropFirst("gcal-".count).prefix(while: { $0 != "-" }))
+        return ICSFeedColors.color(forKey: key)
+    }
+
+    /// Settings changed a feed's default color → re-derive the display caches so the feed's
+    /// non-overridden items pick the new color up.
+    public func feedColorsChanged() {
+        caches.editGen &+= 1
+        caches.deadlineGen &+= 1
+        wake()
+    }
 }
 
 public extension CalendarEngine {

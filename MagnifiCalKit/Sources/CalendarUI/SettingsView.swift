@@ -14,6 +14,7 @@
 // as in EventDrawer).
 
 import CalendarEngine
+import CalendarGeometry
 import SwiftUI
 
 public struct SettingsView: View {
@@ -325,8 +326,10 @@ private struct CalendarFeedList: View {
     /// This list's provider slice: Outlook feeds under the Outlook section; everything else
     /// (Google + generic .ics — either could have been pasted into the Google box) under Google's.
     let outlook: Bool
+    @Environment(\.colorScheme) private var scheme
     @State private var feeds: [String]
     @State private var nameGen = 0 // bumped when a fetched feed name lands (see feedTitle)
+    @State private var colorGen = 0 // bumped when a default color is picked (re-render swatches)
 
     init(calId: String, outlook: Bool) {
         self.calId = calId
@@ -339,6 +342,7 @@ private struct CalendarFeedList: View {
     }
 
     var body: some View {
+        let theme = Theme(dark: scheme == .dark)
         Group {
             if shown.isEmpty {
                 Text("No subscribed calendars.").font(.callout).foregroundStyle(.secondary)
@@ -348,6 +352,7 @@ private struct CalendarFeedList: View {
                     Image(systemName: "link").font(.caption).foregroundStyle(.secondary)
                     Text(feedTitle(url)).font(.callout).lineLimit(1)
                     Spacer(minLength: 10)
+                    colorPicker(url, theme)
                     Button("Remove") {
                         ICSFeeds.remove(url, calendarId: calId)
                         feeds = ICSFeeds.list(calendarId: calId)
@@ -369,6 +374,48 @@ private struct CalendarFeedList: View {
         .onReceive(NotificationCenter.default.publisher(for: .icsFeedNamesChanged)) { _ in
             nameGen &+= 1 // a fetch stored a feed's display name → re-render the rows
         }
+    }
+
+    /// The feed's DEFAULT color dropdown: every imported item without a per-item override shows
+    /// this color, and picking a new one re-colors those items live (the calendar listens for
+    /// .icsFeedColorsChanged). New subscriptions arrive pre-assigned by cycling the palette.
+    private func colorPicker(_ url: String, _ theme: Theme) -> some View {
+        let key = ICSFeedKey.feedKey(url)
+        let current = ICSFeedColors.color(forKey: key) ?? "default"
+        let _ = colorGen // @State read → swatch re-renders on pick
+        return Menu {
+            ForEach(EVENT_COLORS.filter { $0 != "default" }, id: \.self) { c in
+                Button {
+                    ICSFeedColors.set(c, forKey: key)
+                    colorGen &+= 1
+                    NotificationCenter.default.post(name: .icsFeedColorsChanged, object: nil)
+                } label: {
+                    // NSImage swatch: menus render SF Symbols as template (tint is dropped),
+                    // so a real bitmap circle is the only way the palette shows its colors.
+                    Label {
+                        Text((current == c ? "✓ " : "") + c.capitalized)
+                    } icon: {
+                        Image(nsImage: Self.swatchImage(theme.eventBorder(c)))
+                    }
+                }
+            }
+        } label: {
+            Circle().fill(theme.eventBorder(current)).frame(width: 12, height: 12)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Default color for events imported from this calendar")
+    }
+
+    /// A small filled-circle bitmap in the given color (non-template, so menus keep it).
+    private static func swatchImage(_ color: Color) -> NSImage {
+        let img = NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+            NSColor(color).setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)).fill()
+            return true
+        }
+        img.isTemplate = false
+        return img
     }
 
     /// "Google Calendar — <name>" / "Outlook Calendar — <name>" once a fetch captured the feed's

@@ -1156,6 +1156,10 @@ public struct CalendarView: View {
                     .onReceive(NotificationCenter.default.publisher(for: .icsFeedsChanged)) { _ in
                         engine.importICSFeeds(urls: ICSFeeds.list(calendarId: engine.activeCalendarId))
                     }
+                    // Settings changed a feed's DEFAULT color → re-color its non-overridden items.
+                    .onReceive(NotificationCenter.default.publisher(for: .icsFeedColorsChanged)) { _ in
+                        engine.feedColorsChanged()
+                    }
                     // A "How to…" deep link (e.g. from Settings) → open the Help window; HelpView
                     // itself selects the topic (HelpNav.pending / the same notification).
                     .onReceive(NotificationCenter.default.publisher(for: .openHelpTopic)) { _ in

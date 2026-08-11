@@ -41,6 +41,7 @@ enum ICSFeeds {
         let clean = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, !urls.contains(clean) else { return }
         urls.append(clean)
+        ICSFeedColors.assignIfNeeded(url: clean) // new subscriptions cycle the palette
         save(urls, calendarId: calendarId)
     }
 
