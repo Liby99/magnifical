@@ -744,12 +744,34 @@ extension CalendarEngine {
     }
 
     /// ── Tags are markdown ─────────────────────────────────────────────────────────────
+    /// Typing must do NOTHING extra: live-typing "#mytag" used to re-parse the whole note AND
+    /// bump editGen per character (the set changes at every char: m→my→myt…), which churned
+    /// every display cache and re-scheduled the autocomplete entity-index rescan per keystroke
+    /// — the "each character gets laggier" report. setNotes now only marks the key dirty; the
+    /// recompute below runs ONCE, shortly after the last keystroke (and is flushed before any
+    /// persist, so the stored cache is never stale).
+    func scheduleTagCacheSync(_ key: String) {
+        pendingTagSync.insert(key)
+        tagSyncWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.flushTagCacheSync() }
+        tagSyncWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    func flushTagCacheSync() {
+        tagSyncWork?.cancel(); tagSyncWork = nil
+        let keys = pendingTagSync
+        pendingTagSync = []
+        for k in keys {
+            syncTagCache(k)
+        }
+    }
+
     /// `rich.tags` is a CACHE of the note's `#tokens` (the drawer's tags UI is gone): recompute it
-    /// whenever the note changes. Vendor-imported items keep the system "imported" tag (it isn't
-    /// note-authored), and only their USER-typed postfix mints tags — a vendor description's
-    /// stray "#word" must not become one. Bumps editGen only when the set actually changed:
-    /// tag-keyed consumers (filter universe, visibility) are display caches, but plain note
-    /// keystrokes must stay off the display-cache path (the setNotes noteGen rule).
+    /// whenever the note changes — via scheduleTagCacheSync on typing paths. Vendor-imported items
+    /// keep the system "imported" tag (it isn't note-authored), and only their USER-typed postfix
+    /// mints tags — a vendor description's stray "#word" must not become one. Bumps editGen only
+    /// when the set actually changed (once per settled edit, thanks to the debounce).
     func syncTagCache(_ key: String) {
         guard var rf = items.richById[key] else { return }
         let body = rf.source == "manual" ? (rf.notes ?? "") : ManagedNote.splitNote(rf.notes).user
@@ -796,7 +818,7 @@ extension CalendarEngine {
         var rf = items.richById[key] ?? RichFields()
         guard rf.notes != v else { return }
         rf.notes = v; items.richById[key] = rf
-        syncTagCache(key) // tags live IN the markdown; rich.tags is a cache of the note's #tokens
+        scheduleTagCacheSync(key) // tags cache re-derives AFTER typing pauses (never per keystroke)
         // NOT in the calendar undo stack: notes are edited in the drawer's CodeMirror, which owns its
         // own undo (Cmd+Z while it's focused). Recording here would let its internal undo re-post the
         // note and pollute the calendar stack. Matches the web (notes are a separate lower layer).

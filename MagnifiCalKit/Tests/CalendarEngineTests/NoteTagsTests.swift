@@ -38,8 +38,10 @@ final class NoteTagsTests: XCTestCase {
         let id = e.createTimedEvent(year: e.year, month: 5, day: 10, startHour: 9, endHour: 10,
                                     title: "T", color: "blue")
         e.setNotes(id, "prep #alpha and #beta")
+        e.flushTagCacheSync() // typing is debounced — the cache settles after the burst
         XCTAssertEqual(e.richTags(id), ["alpha", "beta"])
         e.setNotes(id, "prep #beta only") // removing a token removes the tag
+        e.flushTagCacheSync()
         XCTAssertEqual(e.richTags(id), ["beta"])
     }
 

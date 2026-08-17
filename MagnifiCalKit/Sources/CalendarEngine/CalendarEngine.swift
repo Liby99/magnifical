@@ -171,6 +171,10 @@ public final class CalendarEngine {
     /// The native PROJECTS index, same cadence — see ProjIndex.
     var projFeedCache: (gen: Int, noteGen: Int, today: String, projects: [Project])?
     var todoFeedWork: DispatchWorkItem? // coalesced burst refresh (never rebuilds on the frame path)
+    /// Tags-cache debounce (see scheduleTagCacheSync): typing a note — especially a "#tag" —
+    /// must not re-parse or bump editGen per keystroke; dirty keys settle ~0.35s after the burst.
+    var tagSyncWork: DispatchWorkItem?
+    var pendingTagSync: Set<String> = []
     // Land callbacks fire when the jump's final tween completes — which happens INSIDE sceneInput,
     // i.e. mid-render. The callbacks write SwiftUI state (the dashboard tab), so defer them off the
     // render pass; the hop also sequences them AFTER any chrome.level onChange work already queued

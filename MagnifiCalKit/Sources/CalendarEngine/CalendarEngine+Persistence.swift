@@ -89,6 +89,7 @@ extension CalendarEngine {
 
     /// ── Persistence ─────────────────────────────────────────────────────────────
     func persistNow() {
+        flushTagCacheSync() // the persisted rich.tags cache must reflect the latest note text
         let state = PersistedState(
             events: items.events,
             bands: items.bands,
