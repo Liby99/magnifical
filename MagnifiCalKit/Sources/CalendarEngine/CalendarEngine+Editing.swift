@@ -88,6 +88,62 @@ extension CalendarEngine {
         return found
     }
 
+    /// Edge-indicator stack hit-test: is `p` on a day column's pinned overflow-indicator stack at
+    /// the timeline's top/bottom edge (CalendarGeometry/EdgeIndicators.swift)? One click target per
+    /// stack — whichever sliver is under the cursor, the result is the hour span of that edge's
+    /// NEAREST off-viewport event (this day's clamped segment), the click's scroll-to target.
+    /// Rebuilds the same per-day rects the overlay feeds dayEdgeIndicators (eventsOn + layoutDay +
+    /// eventRect — the eventAt pipeline), so the hit region and the drawn stack always agree.
+    func edgeIndicatorTarget(at p: CGPoint, _ g: SceneInput) -> (topHour: CGFloat, botHour: CGFloat)? {
+        guard z >= 1.5 else { return nil }
+        let tl = timelineInfo(g)
+        guard tl.reveal > 0.05, tl.hourH > 0, tl.colW > 0, p.y >= tl.tlTop, p.y <= tl.tlBottom
+        else { return nil }
+        if z > 2 && p.x >= tl.x0 + CGFloat(daily.dom) * tl.colW {
+            return nil
+        } // under dashboard
+        let relCursor = Int(floor((p.x - tl.x0) / tl.colW)) + 1
+        if dailyFade(relCursor, g) <= 0.02 {
+            return nil
+        }
+        guard let rd = resolveDate(year, focus, relCursor) else { return nil }
+        let sameDay = eventsOn(rd.year, rd.month, rd.day)
+        guard !sameDay.isEmpty else { return nil }
+        let layout = layoutDay(sameDay)
+        var evs: [TimedEvent] = []
+        var rects: [CGRect] = []
+        for e in sameDay {
+            guard let r = eventRect(e, year, focus, tl, g.vp, layout[e.id]) else { continue }
+            evs.append(e)
+            rects.append(CGRect(x: r.minX, y: tl.tlTop - tl.scroll + r.minY, width: r.width, height: r.height))
+        }
+        let colX = tl.x0 + (CGFloat(relCursor) - 1) * tl.colW
+        let ind = dayEdgeIndicators(rects: rects, tlTop: tl.tlTop, tlBottom: tl.tlBottom,
+                                    colX: colX, colW: tl.colW)
+        // The hit band spans the whole staircase (its tallest card — up to 3·edgeIndicatorH),
+        // plus a couple px of grace so the target isn't fiddly at a 1-card stack.
+        let grace: CGFloat = 3
+        if let hit = ind.topHit, let n = ind.topNearest,
+           p.x >= hit.minX, p.x <= hit.maxX, p.y <= hit.maxY + grace {
+            return (evs[n].startHour, min(24, evs[n].endHour))
+        }
+        if let hit = ind.bottomHit, let n = ind.bottomNearest,
+           p.x >= hit.minX, p.x <= hit.maxX, p.y >= hit.minY - grace {
+            return (evs[n].startHour, min(24, evs[n].endHour))
+        }
+        return nil
+    }
+
+    /// Click on an edge-indicator stack: glide the timeline (the house tlScrollTween — the same
+    /// tween keyboard nav / editing reveal use, never a teleport) so the target event's rect sits
+    /// just inside the viewport with a small margin.
+    func revealEdgeIndicatorTarget(_ t: (topHour: CGFloat, botHour: CGFloat)) {
+        let tl = timelineInfo(snapshot())
+        guard tl.hourH > 0 else { return }
+        let margin = 8 / tl.hourH // a small px breathing room, in hours
+        scrollTimelineTo(topHour: t.topHour - margin, botHour: t.botHour + margin)
+    }
+
     func createSpot(at p: CGPoint, _ g: SceneInput) -> (year: Int, month: Int, day: Int, anchor: CGFloat)? {
         let tl = timelineInfo(g)
         guard tl.reveal > 0.05, tl.hourH > 0, p.y >= tl.tlTop, p.y <= tl.tlBottom else { return nil }

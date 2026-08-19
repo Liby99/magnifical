@@ -43,6 +43,22 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.3.0", date: "August 19, 2026",
+            headline: "Markdown tags, timeline edge indicators, and a fully native editor.",
+            changes: [
+                .init(.added, "**Tags are markdown** — type `#tag` anywhere in a note (a space after `#` still makes a heading); existing tags migrate into the notes automatically and the drawer's separate Tags UI is gone."),
+                .init(.added, "Week/day timelines: events scrolled out of view hold as small **edge cards** — color + accent bar, stacked as a staircase, moving with the scroll; click a stack to bring the nearest hidden event back."),
+                .init(.added, "**Help ▸ What's New** — this window; each release's changes with Added/Improved/Fixed badges."),
+                .init(.added, "Per-subscription **default colors** for Google/Outlook feeds — a swatch on each Settings row; changing it re-colors the feed's events you haven't individually recolored."),
+                .init(.improved, "**Fully native** — the retired web-based note editor and its ~3MB of bundled JavaScript are gone (smaller app, one rendering stack)."),
+                .init(.improved, "The pinned monthly dashboard opens **wider** by default (a width you dragged yourself is kept)."),
+                .init(.fixed, "Typing in a note — especially a `#tag` — no longer gets laggier with every character."),
+                .init(.fixed, "A line starting with `#tag` (no space) chips as a tag instead of rendering as a huge heading."),
+                .init(.fixed, "With two note editors open, **⌘S** saves exactly the note holding the cursor — not whichever editor came first."),
+                .init(.fixed, "The Help browser's Projects/Gantt and token screenshots and the AI-assistant tutorial recording are current again."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.2.0", date: "August 10, 2026",
             headline: "External calendars, multiple MagnifiCals, and self-updating builds.",
             changes: [

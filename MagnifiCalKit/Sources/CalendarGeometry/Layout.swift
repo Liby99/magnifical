@@ -99,6 +99,24 @@ public enum Layout {
     /// entries. (The chip IMAGE cache uses a smaller deliberate cap — images cost more.)
     public static let measureCacheCap = 4096
 
+    /// ── Viewport-overflow edge indicators (week/day hour timelines) ────────────────
+    /// THE hand-tunable size of the Apple-Calendar-style scrolled-off-event indicators
+    /// (see EdgeIndicators.swift). One knob, four duties: the innermost card's height,
+    /// the stack's per-level indentation step, the per-level HEIGHT step of the card
+    /// staircase (1st card = H, 2nd = 2H, 3rd = 3H tall, all edge-pinned), AND the
+    /// clamp remnant (an event stops shrinking once this many px remain visible at the
+    /// edge). All widths/offsets/heights derive from it — 1 indicator → full event
+    /// width, H tall; 2 → each (full − H) wide, stepped H apart, H/2H tall; 3 → each
+    /// (full − 2H), stepped 0/H/2H, H/2H/3H tall — so one edit re-tunes the feature.
+    public static let edgeIndicatorH: CGFloat = 5
+    /// Scroll distance (px past the clamp point) over which each indicator morph plays
+    /// out: joining/leaving the stack, indent shifts, the 4th-event handoff. The layout
+    /// is a continuous piecewise-linear function of each event's overshoot — purely
+    /// scroll-driven, never a timed animation.
+    public static let edgeIndicatorMorph: CGFloat = 14
+    /// At most this many indicators per edge; deeper events hide behind the outermost.
+    public static let edgeIndicatorMax = 3
+
     /// Day-view split fraction (timeline width ÷ content width) drag bounds: neither the
     /// timeline nor the dashboard may collapse.
     public static let dayFracMin: CGFloat = 0.22

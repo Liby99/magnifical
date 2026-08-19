@@ -72,7 +72,12 @@ struct NativeNoteEditor: NSViewRepresentable {
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-               event.charactersIgnoringModifiers?.lowercased() == "s" {
+               event.charactersIgnoringModifiers?.lowercased() == "s",
+               // The window dispatches performKeyEquivalent down the WHOLE view tree, not to the
+               // focused view — without this guard, whichever mounted editor comes first in the
+               // hierarchy (e.g. the dashboard notepad) steals ⌘S from the one holding the caret
+               // (e.g. the drawer's event-note editor). Save exactly the editor being typed in.
+               window?.firstResponder === self {
                 onSaveKey?()
                 return true
             }

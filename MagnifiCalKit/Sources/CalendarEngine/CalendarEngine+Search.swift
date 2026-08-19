@@ -330,5 +330,5 @@ extension CalendarEngine {
         jumpToDay(loc.year, loc.month, loc.day) { [weak self] in self?.scrollToSelected() }
     }
 
-    public enum CursorHint { case normal, grab, resizeLR, resizeV, text }
+    public enum CursorHint { case normal, grab, resizeLR, resizeV, text, pointer }
 }

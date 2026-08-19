@@ -33,8 +33,8 @@ case "${PAYLOAD:-display}" in
   dump)    cp "$HOME/.magical-bench/data.json" "$TMP/data.json" ;;  # CC_DUMP_DISPLAY of the REAL app (heavy: 1007 ev)
   dense)   cp bench/year-dense-2026.json "$TMP/data.json" ;;  # stress: real dump densified (3000 ev / ~500 bands @87% lane fill)
   todos)   cp bench/todo-dense-2026.json "$TMP/data.json" ;;  # stress: real store + ~500 July todos (scripts/gen-todo-dense.py)
-  full)    cp "$HOME/Library/Application Support/MagnifiCalKit/data.json" "$TMP/data.json" ;;  # raw live store (LEGACY single-file — misses calendars/!)
-  store)   cp -R "$HOME/Library/Application Support/MagnifiCalKit/." "$TMP/" ;;  # the WHOLE real base dir: registry + every calendar (incl. imports) + all notes — the true payload
+  full)    cp "$HOME/Library/Application Support/CalendarKit/data.json" "$TMP/data.json" ;;  # raw live store (LEGACY single-file — misses calendars/!)
+  store)   cp -R "$HOME/Library/Application Support/CalendarKit/." "$TMP/" ;;  # the WHOLE real base dir: registry + every calendar (incl. imports) + all notes — the true payload
   *) echo "unknown PAYLOAD=${PAYLOAD}"; exit 1 ;;
 esac
 echo "Launching bench scene (throwaway store at $TMP; payload=${PAYLOAD:-display} window=${WINDOW:-default} hover=${HOVER:-0})…"

@@ -102,6 +102,10 @@ public struct EventsOverlay: View {
         plainEff && onlyBox == nil && !Self.canvasKill && (input.z < 1.5 || zoomTransient)
     }
 
+    /// CC_EDGEIND_OFF=1 disables the viewport-overflow edge indicators (scrolled-off events'
+    /// pinned slivers) for same-binary A/B benchmarking, restoring the plain edge cull.
+    private static let edgeIndKill = ProcessInfo.processInfo.environment["CC_EDGEIND_OFF"] != nil
+
     /// A box belongs to the clicked event's series (same source: recurrence occurrence / promoted
     /// bar / original), so it shares the accompanied style.
     /// The activation level for a box (see EventActivation). Only the EXACT selected box is focused
@@ -618,6 +622,12 @@ extension EventsOverlay {
         var gf = input; gf.focus = focus
         let dim = daysInMonth(input.year, focus)
         var placed: [(seg: TimedSegment, rect: CGRect, fade: Double)] = []
+        // Segments scrolled fully past the timeline's top/bottom edge become PINNED edge-indicator
+        // slivers instead of being culled (see dayEdgeIndicators — the whole clamp/stack layout is
+        // a pure per-frame function of these same rects). Collected per day, appended after the
+        // normal items: they draw above plain stickers but below active ones.
+        var pinned: [(seg: TimedSegment, rect: CGRect, fade: Double, rank: Int, top: Bool)] = []
+        var segRects: [(seg: TimedSegment, rect: CGRect)] = [] // reused per day (no per-day realloc)
         for day in days {
             let rd = day.rd
             // Spillover day (belongs to the previous/next month) → drawn dimmed but fully interactive;
@@ -628,17 +638,37 @@ extension EventsOverlay {
             if fade <= 0.02 {
                 continue
             }
+            segRects.removeAll(keepingCapacity: true)
             for s in day.segs {
                 guard let r = eventRect(s.event, input.year, focus, tl, input.vp, day.layout[s.event.id])
                 else { continue }
                 let rect = CGRect(x: r.minX, y: tl.tlTop - tl.scroll + r.minY, width: r.width, height: r.height)
-                if rect.maxY < tl.tlTop || rect.minY > tl.tlBottom {
-                    continue
-                } // outside the timeline band
                 if rect.maxX < -40 || rect.minX > input.vp.w + 40 {
                     continue
                 } // scrolled off horizontally (week/day)
-                placed.append((s, rect, Double(fade)))
+                segRects.append((s, rect))
+            }
+            if segRects.isEmpty {
+                continue
+            }
+            let colX = tl.x0 + (CGFloat(rd) - 1) * tl.colW
+            let ind = Self.edgeIndKill ? DayEdgeIndicators()
+                : dayEdgeIndicators(rects: segRects.map(\.rect), tlTop: tl.tlTop, tlBottom: tl.tlBottom,
+                                    colX: colX, colW: tl.colW)
+            for (i, sr) in segRects.enumerated() {
+                if !ind.isIndicator.isEmpty && ind.isIndicator[i] {
+                    continue
+                } // clamped at an edge → rendered from ind.top/.bottom below
+                if sr.rect.maxY < tl.tlTop || sr.rect.minY > tl.tlBottom {
+                    continue
+                } // outside the timeline band
+                placed.append((sr.seg, sr.rect, Double(fade)))
+            }
+            for e in ind.top {
+                pinned.append((segRects[e.index].seg, e.rect, Double(fade * e.opacity), e.rank, true))
+            }
+            for e in ind.bottom {
+                pinned.append((segRects[e.index].seg, e.rect, Double(fade * e.opacity), e.rank, false))
             }
         }
         placed.sort(by: orderTimed)
@@ -650,7 +680,7 @@ extension EventsOverlay {
         // Hover promotion (see bandItems): boxes the hovered event's segments overlap render as
         // glass views (forceGlass) so its glass frosts them — glass-on-glass, hover-only cost.
         let hoverRects = hovered.map { h in placed.filter { $0.seg.event.id == h }.map(\.rect) } ?? []
-        return placed.enumerated().map { i, p in
+        var out: [Item2] = placed.enumerated().map { i, p in
             let id = p.seg.event.id
             let a = activation(id)
             let z: Double = a.isActive ? a.z : Double(i)
@@ -693,6 +723,26 @@ extension EventsOverlay {
                                      theme: theme))
             }, canvas: fast)
         }
+        // Edge-indicator slivers: the event's color only — no text, no accent bar, no activation
+        // (never hovered/selected; clicks are handled by the engine's edgeIndicatorTarget hit-test,
+        // not these visuals). The "id#MMDD" prefix keeps onlyBox/hideBox segment matching intact.
+        for pn in pinned {
+            let id = pn.seg.event.id
+            let colorKey = freshById[id]?.color ?? pn.seg.event.color
+            let hidden = (eventBadges[id] ?? []).contains(.hidden)
+            let key = "\(id)#\(pn.seg.event.month * 100 + pn.seg.event.day)!\(pn.top ? "t" : "b")" + keyTag
+            let z = 930 - Double(pn.rank) // above plain stickers, below active (950+); innermost on top
+            let onTop = pn.top
+            let fast: StickerDraw? = canvasFastOn
+                ? .edgeIndicator(EdgeIndicatorDraw(colorKey: colorKey, hidden: hidden, top: onTop))
+                : nil
+            let cardH = pn.rect.height
+            out.append(Item2(id: key, rect: pn.rect, fade: pn.fade, z: z, makeView: { [theme] in
+                AnyView(EdgeIndicatorSticker(colorKey: colorKey, hidden: hidden,
+                                             top: onTop, height: cardH, theme: theme))
+            }, canvas: fast))
+        }
+        return out
     }
 
     private static let bandGrainKill = ProcessInfo.processInfo.environment["CC_BANDGRAIN_OFF"] != nil

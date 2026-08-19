@@ -743,6 +743,7 @@ final class CatcherView: NSView, NSMenuItemValidation {
         case .resizeLR: setCursor(.resizeLeftRight)
         case .resizeV: setCursor(.resizeUpDown) // timed-event top/bottom edge
         case .text: setCursor(.iBeam)
+        case .pointer: setCursor(.pointingHand) // edge-indicator stack (click scrolls-to-reveal)
         default: setCursor(.arrow)
         }
     }

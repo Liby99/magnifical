@@ -42,6 +42,13 @@ extension CalendarEngine {
                         origBand: items.bands.first { $0.id == hit.id }, priorSelection: prior)
             return
         }
+        // 1b. edge-indicator stack (pinned at the timeline's top/bottom edge): a click glides the
+        //     timeline so that edge's nearest off-viewport event is revealed. Checked before the
+        //     events — the stack draws above them — and no drag is primed (it's scroll chrome).
+        if z >= 1.5, let t = edgeIndicatorTarget(at: p, g) {
+            revealEdgeIndicatorTarget(t)
+            return
+        }
         // 2. timed events (on the timeline)
         if z >= 1.5, let hit = eventAt(p, g) {
             selectedId = hit.id
@@ -295,6 +302,8 @@ extension CalendarEngine {
             hv.overTimed = true // keep hoveredEventId — a timed event
         } else if let b = bandAt(p, g) {
             hoveredEventId = b.id
+        } else if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
+            hoveredEventId = nil // the indicator stack owns the pointer — no hover on events under it
         } else if z >= 1.5, let e = eventAt(p, g) {
             hoveredEventId = e.id; hv.overTimed = true
         } else if z >= ViewConst.detailZ, let d = deadlineAt(p, g) {
@@ -367,6 +376,10 @@ extension CalendarEngine {
                 return .resizeLR
             }
             return hit.id == selectedId ? .text : .grab // a selected band edits its title on click
+        }
+        // Edge-indicator stack: a click target (scroll-to-reveal) → the pointing hand.
+        if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
+            return .pointer
         }
         // Timed event: the top/bottom edges resize (↕); the title of a SELECTED event is an I-beam (a second
         // click inline-edits it); the accent bar, the time text, and the empty body are a grab hand.

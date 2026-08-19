@@ -96,7 +96,16 @@ struct TimedDraw {
     var subTimeText: String? // anchor-zone range when it differs from the view tz
 }
 
-enum StickerDraw { case band(BandDraw), timed(TimedDraw) }
+/// Flat payload for an edge-indicator sliver — a scrolled-off event's pinned marker at the
+/// timeline's top/bottom edge (see CalendarGeometry/EdgeIndicators.swift). Mirrors
+/// EdgeIndicatorSticker exactly: tinted fill + left accent bar, no text/badges.
+struct EdgeIndicatorDraw {
+    let colorKey: String
+    let hidden: Bool // revealed hidden import → neutral gray
+    let top: Bool // pinned at the top edge (square top corners) vs bottom edge (square bottom)
+}
+
+enum StickerDraw { case band(BandDraw), timed(TimedDraw), edgeIndicator(EdgeIndicatorDraw) }
 
 /// One Canvas-drawable sticker: geometry + the flat payload.
 struct CanvasSticker {
@@ -113,6 +122,7 @@ struct CanvasSticker {
             switch it.draw {
             case let .band(b): drawBand(b, rect: it.rect, fade: it.fade, ctx: &ctx, theme: theme)
             case let .timed(t): drawTimed(t, rect: it.rect, fade: it.fade, ctx: &ctx, theme: theme)
+            case let .edgeIndicator(e): drawEdgeIndicator(e, rect: it.rect, fade: it.fade, ctx: &ctx, theme: theme)
             }
         }
     }
@@ -280,6 +290,33 @@ struct CanvasSticker {
             drawBadges(t.badges, at: CGPoint(x: x, y: rect.minY + 3 + 4), maxX: rect.maxX - 2,
                        color: border, ctx: &layer)
         }
+    }
+
+    /// ── Edge indicator: an uneven-rounded fill of the event's color + its left accent bar ───────
+    /// (square corners/bar-cap on the edge-flush side, rounded facing the viewport — mirrors
+    /// EdgeIndicatorSticker exactly)
+    private static func drawEdgeIndicator(_ e: EdgeIndicatorDraw, rect: CGRect, fade: Double,
+                                          ctx: inout GraphicsContext, theme: Theme) {
+        guard fade > 0.001, rect.width > 0.5 else { return }
+        var layer = ctx
+        layer.opacity = fade
+        let color = e.hidden ? theme.text : theme.eventColor(e.colorKey)
+        let r = min(BandStyle.cornerRadius, rect.height / 2)
+        let radii = RectangleCornerRadii(topLeading: e.top ? 0 : r, bottomLeading: e.top ? r : 0,
+                                         bottomTrailing: e.top ? r : 0, topTrailing: e.top ? 0 : r)
+        layer.fill(
+            Path(roundedRect: rect, cornerRadii: radii),
+            with: .color(color.opacity(edgeIndicatorFillOpacity(theme: theme)))
+        )
+        let barW = BandStyle.accentWidth
+        let barVInset = min(BandStyle.accentInset, max(0, (rect.height - BandStyle.accentInset * 2) / 2))
+        let bar = CGRect(x: rect.minX + BandStyle.accentInset,
+                         y: e.top ? rect.minY : rect.minY + barVInset,
+                         width: barW, height: max(0, rect.height - barVInset))
+        let cap = barW / 2
+        let barRadii = RectangleCornerRadii(topLeading: e.top ? 0 : cap, bottomLeading: e.top ? cap : 0,
+                                            bottomTrailing: e.top ? cap : 0, topTrailing: e.top ? 0 : cap)
+        layer.fill(Path(roundedRect: bar, cornerRadii: barRadii), with: .color(theme.eventBorder(e.colorKey)))
     }
 
     /// The badge glyph row: 6.5pt bold SF Symbols, 2px apart, left-anchored at `at.x`, centered on `at.y`.

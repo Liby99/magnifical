@@ -189,6 +189,49 @@ struct EventSticker: View { // internal: read by EventsOverlay.swift
     }
 }
 
+/// Fill strength for an edge-indicator sliver: exactly the plain sticker's translucent idle tint
+/// (an event's card keeps its normal background color as it clamps into the stack). Shared by the
+/// SwiftUI sticker and the Canvas fast path so both render identically.
+func edgeIndicatorFillOpacity(theme: Theme) -> Double {
+    BandStyle.tintIdle * theme.eventTintScale
+}
+
+/// A scrolled-off event's pinned edge card (see CalendarGeometry/EdgeIndicators.swift): the
+/// event's tinted fill + its left accent bar, edge-pinned — the pure model sizes it (nearer stack
+/// cards are taller, forming the staircase) — NO title, no activation states. Corners are uneven:
+/// square on the edge-flush side, sticker-rounded on the side facing the viewport content; the
+/// bar mirrors that (flush square cap toward the edge the event continues over — the same
+/// "…continued" cue a cross-midnight sticker uses — rounded cap inward). Visual only: the
+/// containing overlay is hit-test-transparent; stack clicks are resolved geometrically by the
+/// engine (edgeIndicatorTarget).
+struct EdgeIndicatorSticker: View { // internal: read by EventsOverlay.swift
+    let colorKey: String
+    let hidden: Bool // revealed hidden import → neutral gray fill (the bar stays colorful)
+    let top: Bool // pinned at the top edge (square top corners) vs bottom edge (square bottom)
+    let height: CGFloat // the model's card height (radius adapts; mirrors drawEdgeIndicator)
+    let theme: Theme
+
+    var body: some View {
+        let color = hidden ? theme.text : theme.eventColor(colorKey)
+        let r = min(BandStyle.cornerRadius, height / 2)
+        let barW = BandStyle.accentWidth
+        // The sticker's short-event rule: the vertical inset shrinks before it can eat the bar.
+        let barVInset = min(BandStyle.accentInset, max(0, (height - BandStyle.accentInset * 2) / 2))
+        let cap = barW / 2
+        UnevenRoundedRectangle(topLeadingRadius: top ? 0 : r, bottomLeadingRadius: top ? r : 0,
+                               bottomTrailingRadius: top ? r : 0, topTrailingRadius: top ? 0 : r)
+            .fill(color.opacity(edgeIndicatorFillOpacity(theme: theme)))
+            .overlay(alignment: .leading) {
+                UnevenRoundedRectangle(topLeadingRadius: top ? 0 : cap, bottomLeadingRadius: top ? cap : 0,
+                                       bottomTrailingRadius: top ? cap : 0, topTrailingRadius: top ? 0 : cap)
+                    .fill(theme.eventBorder(colorKey)).frame(width: barW)
+                    .padding(.top, top ? 0 : barVInset)
+                    .padding(.bottom, top ? barVInset : 0)
+                    .padding(.leading, BandStyle.accentInset)
+            }
+    }
+}
+
 /// Selection/focus border for a cross-midnight segment: same widths/dash as `activationBorder`, but on an
 /// OPEN path that omits the midnight continuation edge(s).
 @ViewBuilder
@@ -401,7 +444,10 @@ struct BandSticker: View { // internal: read by EventsOverlay.swift
                     let shape = bandShape
                     Rectangle().fill(theme.bg.opacity(0.55)) // base occlusion under the frost
                         .frame(width: box.width + maskW, height: box.height)
-                        .glassEffectCompat(.regular.tint(color.opacity(BandStyle.tintIdle * theme.eventTintScale)), in: shape)
+                        .glassEffectCompat(
+                            .regular.tint(color.opacity(BandStyle.tintIdle * theme.eventTintScale)),
+                            in: shape
+                        )
                         .clipShape(shape)
                 }
             }
