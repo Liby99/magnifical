@@ -1,15 +1,16 @@
-// The onboarding "tutorial" — a simple carousel of animated GIFs with captions. Shown once on first
-// launch (see CalendarView's @AppStorage "cc.tutorial.seen") and re-openable from Help ▸ Tutorial. The
-// body isn't really a tutorial: each slide is just a GIF demoing one gesture/feature.
+// The onboarding "tutorial" — a simple carousel of looping demo clips with captions. Shown once on
+// first launch (see CalendarView's @AppStorage "cc.tutorial.seen") and re-openable from Help ▸
+// Tutorial. The body isn't really a tutorial: each slide is just a clip demoing one gesture/feature.
 
 import AppKit
 import SwiftUI
 
-/// One carousel slide: a GIF (loaded by name from the bundle's `tutorial/` folder) + a caption. The final
-/// slide is a `welcome` card (app icon + a friendly sign-off) instead of a demo GIF.
+/// One carousel slide: an mp4 demo clip (loaded by name from the bundle's `tutorial/` folder —
+/// slides are BUNDLED so first launch works offline; see HelpMedia.swift) + a caption. The final
+/// slide is a `welcome` card (app icon + a friendly sign-off) instead of a demo clip.
 struct TutorialSlide: Identifiable {
     let id = UUID()
-    let gif: String // resource name without extension (see Resources/tutorial/README.md); "" for welcome
+    let gif: String // media name without extension (see Resources/tutorial/README.md); "" for welcome
     let caption: String
     var welcome: Bool = false
 }
@@ -36,9 +37,9 @@ struct TutorialView: View {
         ),
     ]
 
-    // The demo GIFs span aspect ratios from ~4.3:1 (year band) to ~0.85:1 (AI panel). A landscape stage
-    // (wider than tall) lets the very-wide clips stay legible while still fitting the tall ones; each GIF is
-    // contained within it. (A square stage would shrink the wide clips to a sliver.)
+    // The demo clips span aspect ratios from ~4.3:1 (year band) to ~0.85:1 (AI panel). A landscape stage
+    // (wider than tall) lets the very-wide clips stay legible while still fitting the tall ones; each clip
+    // is contained within it. (A square stage would shrink the wide clips to a sliver.)
     static let stageW: CGFloat = 620
     static let stageH: CGFloat = 440
 
@@ -66,17 +67,23 @@ struct TutorialView: View {
                         .help("Close")
                 }
 
-                // The stage — a fixed-size area. Demo slides CONTAIN a GIF (fit to its own aspect ratio,
-                // never cropped, border hugging the image); the final slide is the welcome card.
+                // The stage — a fixed-size area. Demo slides CONTAIN a clip (fit to its own aspect ratio,
+                // never cropped, border hugging the video); the final slide is the welcome card.
                 Group {
                     if Self.slides[idx].welcome {
                         WelcomeStage(theme: theme)
                     } else {
-                        GIFStage(name: Self.slides[idx].gif, theme: theme)
+                        DemoClip(name: Self.slides[idx].gif, dark: theme.dark, bundledOnly: true)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(
+                                theme.sep.opacity(0.4),
+                                lineWidth: 1
+                            ))
+                            .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
                     }
                 }
                 .frame(width: Self.stageW, height: Self.stageH)
-                .id(idx) // swap the NSImageView when the slide changes
+                .id(idx) // swap the player when the slide changes
                 .transition(.opacity)
 
                 Text(Self.slides[idx].caption)
@@ -156,73 +163,5 @@ private struct WelcomeStage: View {
             return NSImage(contentsOf: url)
         }
         return nil
-    }
-}
-
-/// The GIF display area: an animating NSImageView loaded from the bundle, or a placeholder when the GIF
-/// isn't present yet (so the carousel is fully usable before the assets are added). Each demo ships in
-/// LIGHT and DARK variants ("<name>-light.gif"/"-dark.gif"); the one matching the viewer's theme is shown
-/// (plain "<name>.gif" is the single-variant fallback).
-private struct GIFStage: View {
-    let name: String
-    let theme: Theme
-
-    private var url: URL? {
-        Bundle.module.url(
-            forResource: "\(name)-\(theme.dark ? "dark" : "light")",
-            withExtension: "gif",
-            subdirectory: "tutorial"
-        )
-            ?? Bundle.module.url(forResource: name, withExtension: "gif", subdirectory: "tutorial")
-    }
-
-    var body: some View {
-        if let url,
-           let img = NSImage(contentsOf: url), img.size.width > 0, img.size.height > 0 {
-            // Fit to the GIF's OWN aspect ratio within the stage, centered — the rounded border wraps the
-            // image itself (no letterbox bars), so nothing is cropped whatever the clip's dimensions are.
-            // No frame here: the parent's fixed .frame(stageW, stageH) centers this aspect-fit view.
-            AnimatedGIFView(image: img)
-                .aspectRatio(img.size.width / img.size.height, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(
-                    theme.sep.opacity(0.4),
-                    lineWidth: 1
-                ))
-                .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
-        } else {
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.text.opacity(0.06))
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                .overlay(VStack(spacing: 10) {
-                    Image(systemName: "play.rectangle.on.rectangle").font(.system(size: 30))
-                        .foregroundStyle(theme.textMuted)
-                    Text("Demo GIF").font(.system(size: 12)).foregroundStyle(theme.textMuted)
-                })
-        }
-    }
-}
-
-/// Wraps NSImageView so a multi-frame GIF actually animates (SwiftUI.Image renders only the first frame).
-private struct AnimatedGIFView: NSViewRepresentable {
-    let image: NSImage
-    func makeNSView(context: Context) -> NSImageView {
-        let v = NSImageView()
-        v.image = image
-        v.animates = true
-        v.imageScaling = .scaleProportionallyUpOrDown
-        v.canDrawSubviewsIntoLayer = true
-        // Don't let the view's native pixel size (e.g. 840px) drive SwiftUI layout — the SwiftUI
-        // aspectRatio + parent frame decide the size; the image just fills whatever it's given.
-        v.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        v.setContentHuggingPriority(.defaultLow, for: .vertical)
-        v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        v.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        return v
-    }
-
-    func updateNSView(_ v: NSImageView, context: Context) {
-        if v.image !== image {
-            v.image = image; v.animates = true
-        }
     }
 }

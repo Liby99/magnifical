@@ -6,8 +6,10 @@
 #   ./scripts/capture-help-shots.sh [scene ...]     # default: proj-gantt todo-panel note-preview
 #   scenes: proj-gantt | todo-panel | note-preview  (see DemoController+HelpGIFs.sceneHelpShot)
 #
-# Each scene is captured in BOTH themes — <scene>-light.png / <scene>-dark.png in the tutorial
-# assets dir — matching the GIFs' theme-pair convention (HelpView's HelpStill picks the variant).
+# Each scene is captured in BOTH themes — <scene>-light.png / <scene>-dark.png in media/help/
+# (help-only assets: committed + exported to the public repo, fetched at runtime, NOT bundled) —
+# matching the demos' theme-pair convention (HelpView's HelpStill picks the variant). pngquant
+# (if installed) crushes each capture ~60-70% losslessly-enough for flat UI.
 # The app runs against a THROWAWAY data dir (never your real calendar). Requires Screen Recording
 # permission for your terminal (the same one-time grant record-tutorial.sh needs); no ffmpeg.
 set -euo pipefail
@@ -20,9 +22,10 @@ BIN=".build/debug/CalendarMac"
 echo "Building CalendarMac (debug)…"
 swift build -c debug >/dev/null
 
+mkdir -p media/help
 for SCENE in "${SCENES[@]}"; do
   for THEME in light dark; do
-    OUT="Sources/CalendarUI/Resources/tutorial/${SCENE}-${THEME}.png"
+    OUT="media/help/${SCENE}-${THEME}.png"
     TMP="$(mktemp -d /tmp/cc-shot.XXXXXX)"
     echo "Staging '$SCENE' ($THEME) — throwaway data at ${TMP}…"
     env CC_DEMO="$SCENE" CC_DEMO_DATADIR="$TMP" CC_APPEARANCE="$THEME" "$BIN" &
@@ -58,6 +61,11 @@ for SCENE in "${SCENES[@]}"; do
     trap - EXIT
     rm -rf "$TMP"
     [ -s "$OUT" ] || { echo "capture FAILED: $OUT is empty"; exit 1; }
+    if command -v pngquant >/dev/null; then
+      before=$(du -h "$OUT" | cut -f1)
+      pngquant --force --skip-if-larger --quality 70-95 --output "$OUT" "$OUT" || true
+      echo "pngquant: ${before} → $(du -h "$OUT" | cut -f1)"
+    fi
     echo "Captured $OUT ($(sips -g pixelWidth -g pixelHeight "$OUT" 2>/dev/null \
       | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w"x"h" px"}'), $(du -h "$OUT" | cut -f1))"
   done

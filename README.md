@@ -8,8 +8,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/pinch-zoom-dark.gif">
-    <img src="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/pinch-zoom-light.gif" width="720" alt="Zooming from a year to a single day on one canvas">
+    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/media/readme/pinch-zoom-dark.gif">
+    <img src="MagnifiCalKit/media/readme/pinch-zoom-light.gif" width="720" alt="Zooming from a year to a single day on one canvas">
   </picture>
 </p>
 
@@ -25,12 +25,12 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/band-year-dark.gif">
-    <img src="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/band-year-light.gif" width="49%" alt="Band events on the year view">
+    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/media/readme/band-year-dark.gif">
+    <img src="MagnifiCalKit/media/readme/band-year-light.gif" width="49%" alt="Band events on the year view">
   </picture>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/markdown-notes-dark.gif">
-    <img src="MagnifiCalKit/Sources/CalendarUI/Resources/tutorial/markdown-notes-light.gif" width="49%" alt="Markdown notes on an event">
+    <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/media/readme/markdown-notes-dark.gif">
+    <img src="MagnifiCalKit/media/readme/markdown-notes-light.gif" width="49%" alt="Markdown notes on an event">
   </picture>
 </p>
 

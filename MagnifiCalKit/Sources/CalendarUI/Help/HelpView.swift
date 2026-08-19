@@ -122,7 +122,7 @@ public struct HelpView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let gif = topic.gif {
-                        HelpGIF(name: gif)
+                        DemoClip(name: gif, dark: theme.dark)
                             .frame(maxWidth: 540)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -178,7 +178,7 @@ public struct HelpView: View {
                 }
             }
         case let .image(name):
-            HelpStill(name: name)
+            RemoteStill(name: name, dark: theme.dark)
                 .frame(maxWidth: 540)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -214,57 +214,4 @@ public struct HelpView: View {
     }
 }
 
-/// ── Animated GIF (SwiftUI.Image shows only the first frame) ──────────────────────────────
-/// Prefers the theme variant ("<name>-light/-dark.gif") matching the viewer, falling back to the plain name
-/// (single-variant assets — most help GIFs ship in one theme).
-private struct HelpGIF: View {
-    let name: String
-    @Environment(\.colorScheme) private var scheme
-    var body: some View {
-        let variant = "\(name)-\(scheme == .dark ? "dark" : "light")"
-        if let url = Bundle.module.url(forResource: variant, withExtension: "gif", subdirectory: "tutorial")
-            ?? Bundle.module.url(forResource: name, withExtension: "gif", subdirectory: "tutorial"),
-            let img = NSImage(contentsOf: url) {
-            GIFImageView(image: img)
-                .aspectRatio(img.size.width / max(1, img.size.height), contentMode: .fit)
-        }
-    }
-}
-
-/// ── Still screenshot (.image blocks) ─────────────────────────────────────────────────────
-/// The GIFs' theme convention for PNGs: prefer "<name>-light/-dark.png" matching the viewer,
-/// fall back to the plain name. Captured by scripts/capture-help-shots.sh.
-private struct HelpStill: View {
-    let name: String
-    @Environment(\.colorScheme) private var scheme
-    var body: some View {
-        let variant = "\(name)-\(scheme == .dark ? "dark" : "light")"
-        if let url = Bundle.module.url(forResource: variant, withExtension: "png", subdirectory: "tutorial")
-            ?? Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "tutorial"),
-            let img = NSImage(contentsOf: url) {
-            Image(nsImage: img)
-                .resizable()
-                .aspectRatio(img.size.width / max(1, img.size.height), contentMode: .fit)
-        }
-    }
-}
-
-private struct GIFImageView: NSViewRepresentable {
-    let image: NSImage
-    func makeNSView(context: Context) -> NSImageView {
-        let v = NSImageView()
-        v.image = image
-        v.animates = true
-        v.imageScaling = .scaleProportionallyUpOrDown
-        v.canDrawSubviewsIntoLayer = true
-        v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        v.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        return v
-    }
-
-    func updateNSView(_ v: NSImageView, context: Context) {
-        if v.image !== image {
-            v.image = image; v.animates = true
-        }
-    }
-}
+// (Demo clips + stills live in HelpMedia.swift — DemoClip / RemoteStill: bundle → cache → GitHub.)
