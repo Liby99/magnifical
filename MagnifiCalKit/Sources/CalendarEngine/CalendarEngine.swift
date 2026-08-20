@@ -1260,4 +1260,7 @@ public final class CalendarEngine {
 public extension Notification.Name {
     /// CC_TRACE: render-clock transitions (object: Bool awake).
     static let ccTraceClock = Notification.Name("cc.trace.clock")
+    /// Settings ▸ Developer ▸ "Push Everything to iCloud" → the engine owner runs
+    /// pushEverythingToCloud() (Settings has no engine reference — the house pattern).
+    static let cloudPushEverything = Notification.Name("cc.cloud.pushEverything")
 }

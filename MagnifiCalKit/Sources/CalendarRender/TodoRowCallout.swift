@@ -4,11 +4,13 @@
 // own pin tag ("proj-pinned" on PROJ, "pinned" on the TODO panel) and its own write closures;
 // everything visual lives here once.
 
-import AppKit
 import CalendarEngine
 import CalendarGeometry
-import CalendarRender
 import SwiftUI
+
+#if os(macOS)
+    import AppKit
+#endif
 
 /// Every WRITE the row callout can trigger — assignment-style construction only, the
 /// EventMenuActions pattern (a many-argument call here is a type-checker cliff). All closures
@@ -54,8 +56,12 @@ struct TodoRowCallout: View {
             row("Check", icon: "checkmark.square", disabled: done) { actions.toggle(todo) }
             row("Uncheck", icon: "square", disabled: !done) { actions.toggle(todo) }
             row("Copy", icon: "doc.on.doc") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(todo.text, forType: .string)
+                #if os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(todo.text, forType: .string)
+                #else
+                    UIPasteboard.general.string = todo.text
+                #endif
             }
             if pinned {
                 row("Unpin", icon: "pin.slash") { actions.unpin(todo) }

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<!-- Calendar: Settings pages are static plists over UserDefaults, so the app PUBLISHES
+		     the live state into the two read-only rows (PhoneSettingsBridge, on every foreground)
+		     and CONSUMES the "Switch to" field: type a calendar's name, reopen MagnifiCal, and the
+		     bridge matches it (case-insensitive) and switches. -->
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Calendar</string>
+			<key>FooterText</key>
+			<string>To switch, type a calendar's name exactly as listed and reopen MagnifiCal.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Active</string>
+			<key>Key</key>
+			<string>cc.settings.activeCalendarName</string>
+			<key>DefaultValue</key>
+			<string>Main</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Available</string>
+			<key>Key</key>
+			<string>cc.settings.calendarList</string>
+			<key>DefaultValue</key>
+			<string>Main</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTextFieldSpecifier</string>
+			<key>Title</key>
+			<string>Switch to</string>
+			<key>Key</key>
+			<string>cc.settings.requestedCalendar</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>AutocapitalizationType</key>
+			<string>None</string>
+			<key>AutocorrectionType</key>
+			<string>No</string>
+		</dict>
+		<!-- Developer -->
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Developer</string>
+			<key>FooterText</key>
+			<string>fps · p95 · max over the last second. Numbers are only meaningful in a Release build.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Frame Rate HUD</string>
+			<key>Key</key>
+			<string>cc.fpsHUD</string>
+			<key>DefaultValue</key>
+			<false/>
+		</dict>
+		<!-- About -->
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>About</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Version</string>
+			<key>Key</key>
+			<string>cc.settings.version</string>
+			<key>DefaultValue</key>
+			<string>—</string>
+		</dict>
+	</array>
+</dict>
+</plist>

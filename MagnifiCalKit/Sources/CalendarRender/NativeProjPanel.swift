@@ -7,13 +7,15 @@
 // now pill, the This Week/Month band, and two axis rows. Sized for readability: 26pt row pitch,
 // 13pt labels (the TODO list's size), 10pt+ chrome text.
 
-import AppKit
 import CalendarEngine
 import CalendarGeometry
-import CalendarRender
 import SwiftUI
 
-struct NativeProjPanel: View {
+#if os(macOS)
+    import AppKit
+#endif
+
+public struct NativeProjPanel: View {
     let engine: CalendarEngine
     let scope: String // "week" | "month"
     let key: String
@@ -23,6 +25,21 @@ struct NativeProjPanel: View {
     /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
     /// — the confirm's blur must cover the WHOLE window, not just this panel.
     var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+
+    /// Explicit init mirroring the old memberwise defaults (public — the module boundary
+    /// dropped the free memberwise init when the panel moved to CalendarRender).
+    public init(engine: CalendarEngine, scope: String, key: String, theme: Theme,
+                onOpen: @escaping (String, Int?, String?) -> Void,
+                onJump: @escaping (String, Int?) -> Void = { _, _ in },
+                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in }) {
+        self.engine = engine
+        self.scope = scope
+        self.key = key
+        self.theme = theme
+        self.onOpen = onOpen
+        self.onJump = onJump
+        self.onDeleteRequest = onDeleteRequest
+    }
 
     @State private var expanded: String? // accordion: at most one project shows ALL rows
 
@@ -41,8 +58,8 @@ struct NativeProjPanel: View {
     @State private var frozen: Frozen?
     @State private var quickAddHovering = false // pointer over ANY chart's quick-add row
 
-    static let rowH: CGFloat = 26 // row pitch (label row == track row)
-    static let trackH: CGFloat = 20 // the grey track's height within the row
+    public static let rowH: CGFloat = 26 // row pitch (label row == track row)
+    public static let trackH: CGFloat = 20 // the grey track's height within the row
     /// Bar-segment opacity — tune to taste. LIGHT: .60 of the hue over a near-white track
     /// reads as a pleasant tint (the web shipped .85). DARK needs MORE alpha, not less: the
     /// same alpha composites the color into the dark track and washes it grey — the "faded,
@@ -54,7 +71,7 @@ struct NativeProjPanel: View {
         dark ? barOpacityDark : barOpacity
     }
 
-    var body: some View {
+    public var body: some View {
         // OBSERVABLE dependency on note content (NoteEditGen, the preview-repaint pattern):
         // a quick-add or row-menu write at REST must repaint through Observation — wake()'s
         // ticks can be ZERO on an idle ProMotion display, and unlike a checkbox toggle these
@@ -89,14 +106,17 @@ struct NativeProjPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollIndicators(.hidden)
-        // Click-away unfocus: a click anywhere in the panel OUTSIDE the quick-add row drops the
-        // field's focus. Simultaneous → row/checkbox/title clicks keep working untouched; the
-        // row's own tap re-sets focus and its hover guard keeps this no-op there.
-        .simultaneousGesture(TapGesture().onEnded {
-            if !quickAddHovering {
-                NSApp.keyWindow?.makeFirstResponder(nil)
-            }
-        })
+        #if os(macOS)
+            // Click-away unfocus: a click anywhere in the panel OUTSIDE the quick-add row drops
+            // the field's focus. Simultaneous → row/checkbox/title clicks keep working untouched;
+            // the row's own tap re-sets focus and its hover guard keeps this no-op there.
+            // (macOS-only: iOS has no NSApp; the drawer dismiss handles keyboard resign there.)
+            .simultaneousGesture(TapGesture().onEnded {
+                if !quickAddHovering {
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                }
+            })
+        #endif
     }
 
     // ── Row-menu writes (the right-click callout's actions) ──────────────────────────────────
@@ -293,28 +313,36 @@ private struct ProjChart: View {
             let labelW = max(120, geo.size.width * 0.32)
             let plotW = max(40, geo.size.width - labelW - 10)
             ZStack(alignment: .topLeading) {
-                // BEHIND the columns: ONE AppKit mouse layer per chart. NSView tracking areas
-                // fire regardless of the SwiftUI content drawn above (unlike .onHover, which
-                // goes to the topmost hit-testable view — strips behind the row buttons/plot
-                // shapes never heard a thing: the "hover doesn't show" bug). It owns hover
-                // row-tracking AND the right-click; left clicks pass through untouched.
-                ChartMouseLayer(headroom: headroom, rowH: NativeProjPanel.rowH,
-                                rowCount: tasks.count,
-                                onHover: { idx in
-                                    hoveredRow = idx.map { tasks[$0].rowId }
-                                },
-                                onRightClick: { idx, p in
-                                    guard idx < tasks.count else { return }
-                                    rowMenu = RowMenu(task: tasks[idx],
-                                                      anchor: CGRect(x: p.x, y: p.y,
-                                                                     width: 1, height: 1))
-                                })
+                #if os(macOS)
+                    // BEHIND the columns: ONE AppKit mouse layer per chart. NSView tracking areas
+                    // fire regardless of the SwiftUI content drawn above (unlike .onHover, which
+                    // goes to the topmost hit-testable view — strips behind the row buttons/plot
+                    // shapes never heard a thing: the "hover doesn't show" bug). It owns hover
+                    // row-tracking AND the right-click; left clicks pass through untouched.
+                    // iOS compiles it out: hover/right-click are pointer affordances, and the
+                    // phone client is read-only.
+                    ChartMouseLayer(headroom: headroom, rowH: NativeProjPanel.rowH,
+                                    rowCount: tasks.count,
+                                    onHover: { idx in
+                                        hoveredRow = idx.map { tasks[$0].rowId }
+                                    },
+                                    onRightClick: { idx, p in
+                                        guard idx < tasks.count else { return }
+                                        rowMenu = RowMenu(task: tasks[idx],
+                                                          anchor: CGRect(x: p.x, y: p.y,
+                                                                         width: 1, height: 1))
+                                    })
+                #endif
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 0) {
                         // The quick-add row rides INSIDE the existing headroom strip (bottom-
                         // aligned, right above the top row) — no extra chart height.
                         Color.clear.frame(height: headroom)
-                            .overlay(alignment: .bottomLeading) { quickAddRow }
+                            .overlay(alignment: .bottomLeading) {
+                                if !NativeDash.readOnly {
+                                    quickAddRow // read-only drawer (iPhone): no authoring row
+                                }
+                            }
                         ForEach(tasks, id: \.rowId) { t in
                             labelRow(t).transition(.rowReveal)
                         }
@@ -709,141 +737,143 @@ private struct ProjChart: View {
     }
 }
 
-/// An AppKit right-click catcher riding as a row strip's BACKGROUND: SwiftUI controls ignore
-/// rightMouseDown, so this NSView hit-tests ONLY right-button events — left clicks (and the
-/// panel's tap gesture) fall through to the SwiftUI content above untouched. Reports the click
-/// point in the view's own top-left-origin space (the strip is flipped to match SwiftUI).
-/// One AppKit mouse layer per chart: hover row-tracking via an NSTrackingArea — which fires
-/// regardless of the SwiftUI content drawn above it, unlike .onHover — plus the right-click.
-/// hitTest bites ONLY on right-button events, so every left click passes through to the
-/// SwiftUI rows exactly as before. Reports row indices computed from the shared row grid
-/// (headroom + index·rowH) and points in the chart's (flipped) coordinate space.
-private struct ChartMouseLayer: NSViewRepresentable {
-    var headroom: CGFloat
-    var rowH: CGFloat
-    var rowCount: Int
-    var onHover: (Int?) -> Void
-    var onRightClick: (Int, CGPoint) -> Void
+#if os(macOS)
+    /// An AppKit right-click catcher riding as a row strip's BACKGROUND: SwiftUI controls ignore
+    /// rightMouseDown, so this NSView hit-tests ONLY right-button events — left clicks (and the
+    /// panel's tap gesture) fall through to the SwiftUI content above untouched. Reports the click
+    /// point in the view's own top-left-origin space (the strip is flipped to match SwiftUI).
+    /// One AppKit mouse layer per chart: hover row-tracking via an NSTrackingArea — which fires
+    /// regardless of the SwiftUI content drawn above it, unlike .onHover — plus the right-click.
+    /// hitTest bites ONLY on right-button events, so every left click passes through to the
+    /// SwiftUI rows exactly as before. Reports row indices computed from the shared row grid
+    /// (headroom + index·rowH) and points in the chart's (flipped) coordinate space.
+    private struct ChartMouseLayer: NSViewRepresentable {
+        var headroom: CGFloat
+        var rowH: CGFloat
+        var rowCount: Int
+        var onHover: (Int?) -> Void
+        var onRightClick: (Int, CGPoint) -> Void
 
-    func makeNSView(context _: Context) -> Layer {
-        let v = Layer()
-        apply(to: v)
-        return v
-    }
-
-    func updateNSView(_ v: Layer, context _: Context) {
-        apply(to: v)
-    }
-
-    private func apply(to v: Layer) {
-        v.headroom = headroom
-        v.rowH = rowH
-        v.rowCount = rowCount
-        v.onHover = onHover
-        v.onRightClick = onRightClick
-    }
-
-    final class Layer: NSView {
-        var headroom: CGFloat = 0
-        var rowH: CGFloat = 26
-        var rowCount = 0
-        var onHover: ((Int?) -> Void)?
-        var onRightClick: ((Int, CGPoint) -> Void)?
-        private var lastRow: Int? = -1 // -1 ≠ nil: force the first report
-
-        override var isFlipped: Bool {
-            true
-        } // row 0 at the top, like the SwiftUI layout
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(NSTrackingArea(
-                rect: .zero,
-                options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-                owner: self, userInfo: nil
-            ))
+        func makeNSView(context _: Context) -> Layer {
+            let v = Layer()
+            apply(to: v)
+            return v
         }
 
-        private func row(at p: CGPoint) -> Int? {
-            let i = Int((p.y - headroom) / rowH)
-            return p.y >= headroom && i >= 0 && i < rowCount ? i : nil
+        func updateNSView(_ v: Layer, context _: Context) {
+            apply(to: v)
         }
 
-        private func report(_ r: Int?) {
-            if r != lastRow {
-                lastRow = r
-                onHover?(r)
+        private func apply(to v: Layer) {
+            v.headroom = headroom
+            v.rowH = rowH
+            v.rowCount = rowCount
+            v.onHover = onHover
+            v.onRightClick = onRightClick
+        }
+
+        final class Layer: NSView {
+            var headroom: CGFloat = 0
+            var rowH: CGFloat = 26
+            var rowCount = 0
+            var onHover: ((Int?) -> Void)?
+            var onRightClick: ((Int, CGPoint) -> Void)?
+            private var lastRow: Int? = -1 // -1 ≠ nil: force the first report
+
+            override var isFlipped: Bool {
+                true
+            } // row 0 at the top, like the SwiftUI layout
+
+            override func updateTrackingAreas() {
+                super.updateTrackingAreas()
+                trackingAreas.forEach(removeTrackingArea)
+                addTrackingArea(NSTrackingArea(
+                    rect: .zero,
+                    options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                    owner: self, userInfo: nil
+                ))
             }
-        }
 
-        override func mouseEntered(with event: NSEvent) {
-            guard effectivelyVisible else { return }
-            report(row(at: convert(event.locationInWindow, from: nil)))
-        }
+            private func row(at p: CGPoint) -> Int? {
+                let i = Int((p.y - headroom) / rowH)
+                return p.y >= headroom && i >= 0 && i < rowCount ? i : nil
+            }
 
-        override func mouseMoved(with event: NSEvent) {
-            guard effectivelyVisible else { return }
-            report(row(at: convert(event.locationInWindow, from: nil)))
-        }
-
-        override func mouseExited(with _: NSEvent) {
-            report(nil)
-        }
-
-        /// Never the hit-test target: every click belongs to the SwiftUI rows. Right-clicks
-        /// arrive via a LOCAL EVENT MONITOR instead — AppKit hit-testing routed them to other
-        /// views over the row text / timeline shapes, which made the menu work only on the
-        /// row's empty stretches.
-        override func hitTest(_: NSPoint) -> NSView? {
-            nil
-        }
-
-        /// Parked/warmed twins of this chart stay mounted at opacity 0 AT THE SAME SCREEN
-        /// POSITION — their monitors must not steal the live chart's right-clicks (they
-        /// resolved a DIFFERENT month/week's row at the click point: the "menu shows the
-        /// wrong check state on some items" bug). Same guard as the TODO panel's layer.
-        private var effectivelyVisible: Bool {
-            guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
-            var l = layer
-            while let cur = l {
-                if cur.opacity < 0.01 {
-                    return false
+            private func report(_ r: Int?) {
+                if r != lastRow {
+                    lastRow = r
+                    onHover?(r)
                 }
-                l = cur.superlayer
             }
-            return true
-        }
 
-        private var rightClickMonitor: Any?
+            override func mouseEntered(with event: NSEvent) {
+                guard effectivelyVisible else { return }
+                report(row(at: convert(event.locationInWindow, from: nil)))
+            }
 
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window == nil {
+            override func mouseMoved(with event: NSEvent) {
+                guard effectivelyVisible else { return }
+                report(row(at: convert(event.locationInWindow, from: nil)))
+            }
+
+            override func mouseExited(with _: NSEvent) {
+                report(nil)
+            }
+
+            /// Never the hit-test target: every click belongs to the SwiftUI rows. Right-clicks
+            /// arrive via a LOCAL EVENT MONITOR instead — AppKit hit-testing routed them to other
+            /// views over the row text / timeline shapes, which made the menu work only on the
+            /// row's empty stretches.
+            override func hitTest(_: NSPoint) -> NSView? {
+                nil
+            }
+
+            /// Parked/warmed twins of this chart stay mounted at opacity 0 AT THE SAME SCREEN
+            /// POSITION — their monitors must not steal the live chart's right-clicks (they
+            /// resolved a DIFFERENT month/week's row at the click point: the "menu shows the
+            /// wrong check state on some items" bug). Same guard as the TODO panel's layer.
+            private var effectivelyVisible: Bool {
+                guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
+                var l = layer
+                while let cur = l {
+                    if cur.opacity < 0.01 {
+                        return false
+                    }
+                    l = cur.superlayer
+                }
+                return true
+            }
+
+            private var rightClickMonitor: Any?
+
+            override func viewDidMoveToWindow() {
+                super.viewDidMoveToWindow()
+                if window == nil {
+                    if let m = rightClickMonitor {
+                        NSEvent.removeMonitor(m)
+                        rightClickMonitor = nil
+                    }
+                } else if rightClickMonitor == nil {
+                    rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
+                        [weak self] e in
+                        guard let self, e.window === self.window, self.effectivelyVisible
+                        else { return e }
+                        let p = self.convert(e.locationInWindow, from: nil)
+                        guard self.bounds.contains(p), let r = self.row(at: p) else { return e }
+                        self.onRightClick?(r, p)
+                        return nil // consumed — no pass-through context menus underneath
+                    }
+                }
+            }
+
+            deinit {
                 if let m = rightClickMonitor {
                     NSEvent.removeMonitor(m)
-                    rightClickMonitor = nil
                 }
-            } else if rightClickMonitor == nil {
-                rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
-                    [weak self] e in
-                    guard let self, e.window === self.window, self.effectivelyVisible
-                    else { return e }
-                    let p = self.convert(e.locationInWindow, from: nil)
-                    guard self.bounds.contains(p), let r = self.row(at: p) else { return e }
-                    self.onRightClick?(r, p)
-                    return nil // consumed — no pass-through context menus underneath
-                }
-            }
-        }
-
-        deinit {
-            if let m = rightClickMonitor {
-                NSEvent.removeMonitor(m)
             }
         }
     }
-}
+#endif
 
 /// The gantt label's check/uncheck animation — the TODO panel's mechanism, single-line: two
 /// copies of the SAME text under COMPLEMENTARY left/right masks, the struck accent-grey copy

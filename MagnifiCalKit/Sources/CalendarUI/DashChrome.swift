@@ -15,9 +15,6 @@ import SwiftUI
 /// dashboard webview also used it to hand gestures back to the calendar.
 @MainActor final class CatcherHandle { weak var catcher: NSView? }
 
-/// The dashboard's tabs: the TODO list (default), a per-scope markdown NOTE, and the PROJ gantt.
-public enum DashTab: Hashable { case todo, note, proj }
-
 /// Per-frame carousel state for the NATIVE SwiftUI tabs, so they slide + fade in lockstep with the
 /// Canvas title and the WebView content when paging days. Written by the driver (inside TimelineView),
 /// read by DashTabs. Guarded sets → no re-render while idle (p=0, reveal=1, slide=0 constant).

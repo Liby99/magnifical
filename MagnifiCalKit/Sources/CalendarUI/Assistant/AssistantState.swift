@@ -374,6 +374,11 @@ public final class AssistantState {
         focusInput &+= 1
     }
 
+    /// Set (then openWindow) to open the chat window WITH the conversations sidebar revealed —
+    /// the menu-bar item's "Past Conversations". The window consumes and resets it, whether it
+    /// was already open (onChange) or is being created (onAppear).
+    public var pendingSidebarReveal = false
+
     public func newChat() {
         task?.cancel(); task = nil
         resumeWire = nil; blockedState = nil

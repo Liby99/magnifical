@@ -27,6 +27,17 @@ extension CalendarEngine {
         }
     }
 
+    /// Developer maintenance: re-offer the ACTIVE calendar's zone+records and the whole calendar
+    /// registry to the server. The recovery path for a server that never accepted the data
+    /// (undeployed production schema, wiped environment): saved sync state believes everything
+    /// is synced, so only an explicit re-enqueue can backfill. Local-wins conflicts make it
+    /// safe to run against a server that has some of the records. Per-calendar: switch
+    /// calendars and run again to backfill the others.
+    public func pushEverythingToCloud() {
+        registrySync?.pushEverything()
+        cloud?.pushEverything()
+    }
+
     /// Nudge a cloud fetch/push (foreground, periodic, or the Connectivity menu's "Sync Now").
     public func syncNow() {
         cloud?.syncNow()

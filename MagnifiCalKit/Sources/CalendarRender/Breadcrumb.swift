@@ -41,20 +41,26 @@ public struct Breadcrumb: View {
                     .buttonStyle(.plain)
             }
             if chrome.level >= 1 {
-                sep; crumbButton(MONTH_LONG[chrome.displayFocus], active: chrome.level == 1) { engine.zoomToMonth() }
+                // Phone (compact gutter): the 3-letter month ("Aug") — the tight trail
+                // (2026 › Aug › Wk 4 › 19) must fit the bottom capsule. Desktop keeps "August".
+                sep; crumbButton(Layout.isCompactGutter ? MONTH_NAMES[chrome.displayFocus]
+                    : MONTH_LONG[chrome.displayFocus],
+                    active: chrome.level == 1) { engine.zoomToMonth() }
             }
             if chrome.level >= 2 {
-                sep; crumbButton("Week \(Int(chrome.week.rounded()) + 1)", active: chrome.level == 2) {
+                let wk = Int(chrome.week.rounded()) + 1
+                sep; crumbButton(Layout.isCompactGutter ? "Wk \(wk)" : "Week \(wk)",
+                                 active: chrome.level == 2) {
                     engine.zoomToWeek()
                 }
             }
             if chrome.level >= 3, let r = resolveDate(chrome.year, chrome.displayFocus, chrome.displayDom) {
-                // Phone (compact gutter): just the ordinal ("21st") — the weekday lives in the
-                // day column's own header, and the tight trail (2026 › July › Week 4 › 21st)
+                // Phone (compact gutter): just the day number ("19") — the weekday lives in the
+                // day column's own header, and the tight trail (2026 › Aug › Wk 4 › 19)
                 // must fit the bottom capsule. Desktop keeps the full "Monday, 21st".
                 sep
                 if Layout.isCompactGutter {
-                    crumb("\(r.day)\(ordinal(r.day))", active: true)
+                    crumb("\(r.day)", active: true)
                 } else {
                     crumb("\(WD_LONG[dayOfWeek(r.year, r.month, r.day)]), \(r.day)\(ordinal(r.day))",
                           active: true)

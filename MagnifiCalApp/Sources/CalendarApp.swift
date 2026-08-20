@@ -205,7 +205,7 @@ struct CalendarApp: App {
 
         // Menu-bar item (top-right) → a small dropdown. Its presence keeps the app alive when all
         // windows are closed, so the chat can be opened without (or outliving) the calendar window.
-        MenuBarExtra("MagnifiCal AI", systemImage: "sparkles") {
+        MenuBarExtra("MagnifiCal", systemImage: "calendar") {
             MenuBarContent(assistant: assistant)
         }
     }
@@ -447,15 +447,19 @@ private struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button { openWindow(id: "assistant") } label: { Label("Open MagnifiCal AI", systemImage: "sparkles") }
+        Button { openWindow(id: "calendar") } label: { Label("Open MagnifiCal", systemImage: "calendar") }
+        Divider()
+        Button { openWindow(id: "assistant") } label: { Label("MagnifiCal AI", systemImage: "sparkles") }
         Button { assistant.newChat(); openWindow(id: "assistant") } label: { Label(
             "New Chat",
             systemImage: "square.and.pencil"
         ) }
+        Button {
+            assistant.pendingSidebarReveal = true
+            openWindow(id: "assistant")
+        } label: { Label("Past Conversations", systemImage: "clock.arrow.circlepath") }
         Divider()
-        Button { openWindow(id: "calendar") } label: { Label("Show MagnifiCal", systemImage: "calendar") }
         SettingsLink { Label("Settings…", systemImage: "gearshape") }
-        Divider()
         Button { NSApplication.shared.terminate(nil) } label: { Label("Quit MagnifiCal", systemImage: "power") }
     }
 }

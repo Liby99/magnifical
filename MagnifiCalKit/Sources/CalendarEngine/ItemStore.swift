@@ -81,7 +81,9 @@ func calendarKitBaseDir() -> URL {
     #if os(iOS)
         // On device CC_DEMO_DATADIR can't point at a mac path; without this redirect a CC_DEMO
         // run would fall through to the app's REAL store. BenchStaging fills this dir at launch.
-        if CalendarEngine.isDemoMode {
+        // (Inlined CC_DEMO check — CalendarEngine.isDemoMode is MainActor-isolated and this
+        // function is not.)
+        if !(ProcessInfo.processInfo.environment["CC_DEMO"] ?? "").isEmpty {
             return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("bench-store", isDirectory: true)
         }

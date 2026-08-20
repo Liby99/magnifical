@@ -904,9 +904,28 @@ private struct DeveloperTab: View {
         }
     }
 
+    @State private var pushedAt: Date?
+
     var body: some View {
         Form {
             Section("iCloud") {
+                Button("Push Everything to iCloud") {
+                    NotificationCenter.default.post(name: .cloudPushEverything, object: nil)
+                    pushedAt = Date()
+                }
+                if let at = pushedAt {
+                    Text("Enqueued at \(at.formatted(date: .omitted, time: .standard)) — progress in the " +
+                        "unified log, subsystem dev.magnifical.calendar, category cloud.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Re-offers the ACTIVE calendar's zone + every record, plus the calendar registry, " +
+                    "to the server — the recovery path when the server never accepted the data (e.g. an " +
+                    "undeployed production schema while sends failed silently). Conflicts resolve " +
+                    "local-wins, so it's safe if the server already has some records. Per-calendar: " +
+                    "switch calendars and run again to backfill the others.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button(pruning ? "Pruning…" : "Prune Orphaned iCloud Zones…") { confirmPrune = true }
                     .disabled(pruning)
                 if let s = pruneStatus {

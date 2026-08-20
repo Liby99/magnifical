@@ -3,7 +3,7 @@
 The phone twin of the Mac's `scripts/bench-year.sh` harness. Same stats math (`BenchStats`,
 golden-tested), same results-log line format, phone-shaped scenes driving the exact engine
 mirrors the touch drivers use (`PhonePagers.swift`). Runner: `CalendarRender/PhoneBench.swift`;
-app wiring: `CalendarApp/iOS/CalendarApp_iOS.swift` + `PhoneCalendarView.swift`.
+app wiring: `MagnifiCalApp/iOS/CalendarApp_iOS.swift` + `PhoneCalendarView.swift`.
 
 **Results are only meaningful from a Release build on a physical device.**
 - The Simulator uses the host's CPU/GPU with no real display pacing or thermals — use it for

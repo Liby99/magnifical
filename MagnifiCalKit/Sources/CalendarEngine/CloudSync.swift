@@ -12,7 +12,14 @@
 import CalendarGeometry
 import CloudKit
 import Foundation
+import os
 import Security
+
+/// Sync diagnostics (Xcode console / `log stream`, subsystem dev.magnifical.calendar,
+/// category "cloud"). This layer used to be SILENT — `try?` swallowed every fetch error,
+/// which made an empty first fetch on a fresh device undiagnosable (the 2026-08 phone
+/// empty-calendar hunt). Shared with RegistrySync.
+let cloudLog = Logger(subsystem: "dev.magnifical.calendar", category: "cloud")
 
 /// Developer maintenance (Settings ▸ Developer): enumerate every zone in the private database and
 /// delete the ones belonging to NO registered calendar — migration leftovers whose records linger
@@ -126,7 +133,13 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
     /// ── Lifecycle ─────────────────────────────────────────────────────────────────
     func startIfAccountAvailable() async {
         let status = await (try? container.accountStatus()) ?? .couldNotDetermine
-        guard status == .available else { return } // signed out → stay local, retry on account change
+        guard status == .available else { // signed out → stay local, retry on account change
+            cloudLog
+                .error(
+                    "CloudSync[\(self.zoneID.zoneName, privacy: .public)] NOT starting: account status \(status.rawValue) (1=available)"
+                )
+            return
+        }
         guard let engine else { return } // engine gone → nothing to sync
         loadRecordCache()
 
@@ -137,6 +150,10 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
             delegate: self
         )
         syncEngine = CKSyncEngine(config)
+        cloudLog
+            .notice(
+                "CloudSync[\(self.zoneID.zoneName, privacy: .public)] started (readOnly \(self.readOnly), freshState \(savedState == nil))"
+            )
 
         engine.beginSyncTracking()
         if !readOnly {
@@ -150,18 +167,36 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         // fresh second device this set is small/empty and the initial fetch fills it in.
         // Read-only: never — the phone contributes nothing; the Mac creates the zone.
         if savedState == nil, !readOnly {
-            syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
-            let snap = engine.syncSnapshot()
-            // Standalone overlay records for imported events the user has customized (color/promote/notes/tags).
-            // Series overlays AND per-occurrence exclusions (the make-local-copy "exdate") — any
-            // imported-key rich entry carrying user-authored data.
-            let overlayIDs = (snap.rich ?? [:])
-                .filter { CalendarEngine.hasImportedPrefix($0.key) && CalendarEngine.hasUserOverlay($0.value) }
-                .map(\.key)
-            let ids = snap.events.map(\.id) + snap.bands.map(\.id) + snap.deadlines.map(\.id)
-                + overlayIDs + [CalendarEngine.trackNamesRecordID]
-            syncEngine.state.add(pendingRecordZoneChanges: ids.map { .saveRecord(recordID(for: $0)) })
+            enqueueFullPush(engine)
         }
+    }
+
+    /// Enqueue the zone + EVERY local record — the first-run offer. Also the recovery path when
+    /// the server side never accepted the records (e.g. sends failing silently against an
+    /// undeployed production schema): the saved sync state believes everything is synced, so
+    /// nothing would ever re-enqueue on its own. Conflicts resolve by the house policy (local
+    /// wins), so re-offering records the server DOES have is harmless.
+    private func enqueueFullPush(_ engine: CalendarEngine) {
+        guard let syncEngine else { return }
+        syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+        let snap = engine.syncSnapshot()
+        // Standalone overlay records for imported events the user has customized (color/promote/notes/tags).
+        // Series overlays AND per-occurrence exclusions (the make-local-copy "exdate") — any
+        // imported-key rich entry carrying user-authored data.
+        let overlayIDs = (snap.rich ?? [:])
+            .filter { CalendarEngine.hasImportedPrefix($0.key) && CalendarEngine.hasUserOverlay($0.value) }
+            .map(\.key)
+        let ids = snap.events.map(\.id) + snap.bands.map(\.id) + snap.deadlines.map(\.id)
+            + overlayIDs + [CalendarEngine.trackNamesRecordID]
+        syncEngine.state.add(pendingRecordZoneChanges: ids.map { .saveRecord(recordID(for: $0)) })
+        cloudLog.notice("CloudSync[\(self.zoneID.zoneName, privacy: .public)] full push enqueued: \(ids.count) records")
+    }
+
+    /// Settings ▸ Developer ▸ "Push Everything to iCloud" (active calendar's zone + records).
+    func pushEverything() {
+        guard !readOnly, let engine else { return }
+        enqueueFullPush(engine)
+        syncNow()
     }
 
     /// Nudge a full round-trip (foreground, the 5-min timer, or the Connectivity menu). Fetches remote
@@ -170,9 +205,23 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
     func syncNow() {
         guard let syncEngine else { engine?.syncMonitor.isSyncing = false; return }
         Task { [weak self, readOnly] in
-            try? await syncEngine.fetchChanges()
+            do {
+                try await syncEngine.fetchChanges()
+            } catch {
+                cloudLog
+                    .error(
+                        "CloudSync[\(self?.zoneID.zoneName ?? "?", privacy: .public)] fetch FAILED: \(String(describing: error), privacy: .public)"
+                    )
+            }
             if !readOnly {
-                try? await syncEngine.sendChanges()
+                do {
+                    try await syncEngine.sendChanges()
+                } catch {
+                    cloudLog
+                        .error(
+                            "CloudSync[\(self?.zoneID.zoneName ?? "?", privacy: .public)] send FAILED: \(String(describing: error), privacy: .public)"
+                        )
+                }
             }
             self?.engine?.syncMonitor.isSyncing = false
         }
@@ -272,6 +321,10 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         case let .accountChange(e):
             handleAccountChange(e)
         case let .fetchedRecordZoneChanges(e):
+            cloudLog
+                .notice(
+                    "CloudSync[\(self.zoneID.zoneName, privacy: .public)] fetched \(e.modifications.count) modifications, \(e.deletions.count) deletions"
+                )
             applyFetched(modifications: e.modifications, deletions: e.deletions)
         case let .sentRecordZoneChanges(e):
             handleSent(e)

@@ -1315,6 +1315,10 @@ private struct ViewPrefObservers: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .focusDashProj)) { _ in
                 dashHotkey(.proj) // View ▸ Projects (⌘J)
             }
+            // Settings ▸ Developer: re-offer the active calendar + registry to the server.
+            .onReceive(NotificationCenter.default.publisher(for: .cloudPushEverything)) { _ in
+                engine.pushEverythingToCloud()
+            }
     }
 
     /// ⌘B / ⌘E / ⌘J — faces of one coin: focus the dashboard's TODO / NOTE / PROJ tab.

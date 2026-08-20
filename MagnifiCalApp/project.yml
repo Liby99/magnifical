@@ -39,8 +39,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.magnifical.calendar
         # Semver (see native/CHANGELOG.md): bump MARKETING_VERSION per release; CURRENT_PROJECT_VERSION
         # is the TestFlight build number — unique + ascending per upload (Xcode can auto-manage on upload).
-        MARKETING_VERSION: "0.3.0"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "0.3.1"
+        CURRENT_PROJECT_VERSION: "5"
         GENERATE_INFOPLIST_FILE: YES
         # Merged with the generated plist: Sparkle's feed URL + EdDSA public key.
         INFOPLIST_FILE: Info-macOS.plist
@@ -105,8 +105,8 @@ targets:
       base:
         PRODUCT_NAME: MagnifiCal
         PRODUCT_BUNDLE_IDENTIFIER: dev.magnifical.calendar
-        MARKETING_VERSION: "0.3.0"   # kept in lock-step with the macOS target
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "0.3.1"   # kept in lock-step with the macOS target
+        CURRENT_PROJECT_VERSION: "5"
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -183,7 +183,7 @@ schemes:
       config: Release
     archive:
       config: Release
-  # iPhone BENCH runs (see CalendarKit/bench/PHONE.md): Release build + the CC_* env preset.
+  # iPhone BENCH runs (see MagnifiCalKit/bench/PHONE.md): Release build + the CC_* env preset.
   # Perf numbers are Release-only — Debug SwiftUI is dramatically slower and its numbers are
   # meaningless. Also uncheck "Debug executable" in Xcode for HUD sessions. Set CC_DEMO to the
   # scene under test and CC_BENCH_TAG to the git branch before a run; results print to the

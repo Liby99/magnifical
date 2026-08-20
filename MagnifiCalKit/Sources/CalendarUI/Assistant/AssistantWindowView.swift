@@ -50,21 +50,37 @@ public struct AssistantWindowView: View {
                 .opacity(0)
                 .accessibilityHidden(true)
         }
+        // The menu bar's "Past Conversations": open with the sidebar revealed. Both hooks are
+        // needed — onAppear for a cold-opened window, onChange for one that's already showing.
+        .onAppear { consumeSidebarReveal() }
+        .onChange(of: state.pendingSidebarReveal) { _, _ in consumeSidebarReveal() }
+    }
+
+    private func consumeSidebarReveal() {
+        guard state.pendingSidebarReveal else { return }
+        state.pendingSidebarReveal = false
+        if columns != .all {
+            openSidebar()
+        }
     }
 
     private func toggleSidebar() {
-        let opening = columns != .all
-        withAnimation { columns = opening ? .all : .detailOnly }
-        if opening {
-            cursor = state.conversations.firstIndex { $0.id == state.currentId }
-                ?? (state.conversations.isEmpty ? nil : 0)
-            // Focus once the column has begun revealing (focusing an off-screen list is a no-op;
-            // there is no "column did appear" callback, so this rides the reveal animation's start).
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.sidebarFocusDelay) { sidebarFocused = true }
+        if columns != .all {
+            openSidebar()
         } else {
+            withAnimation { columns = .detailOnly }
             sidebarFocused = false
             state.requestInputFocus() // closing hands the keyboard back to the composer
         }
+    }
+
+    private func openSidebar() {
+        withAnimation { columns = .all }
+        cursor = state.conversations.firstIndex { $0.id == state.currentId }
+            ?? (state.conversations.isEmpty ? nil : 0)
+        // Focus once the column has begun revealing (focusing an off-screen list is a no-op;
+        // there is no "column did appear" callback, so this rides the reveal animation's start).
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.sidebarFocusDelay) { sidebarFocused = true }
     }
 
     /// ── Sidebar: saved conversations (New Chat lives in the toolbar) ─────────────────

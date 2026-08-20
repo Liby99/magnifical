@@ -13,6 +13,15 @@
     <array>
         <string>CloudKit</string>
     </array>
+    <!-- Dev-signed builds default to the DEVELOPMENT CloudKit environment — but the real data
+         lives in PRODUCTION (the shipped Mac DMG pushes there since 0.2.0). Without this
+         override a fresh phone install fetches an empty dev database and the calendar shows
+         nothing. Safe to point a debug build at production: the phone engine is
+         cloudReadOnly (fetch-only, sends hard-blocked). The Mac Debug entitlements stay on
+         dev deliberately — the Mac shares its local store with the DMG, and flipping its
+         env would tangle its saved CKSyncEngine state. -->
+    <key>com.apple.developer.icloud-container-environment</key>
+    <string>Production</string>
     <key>aps-environment</key>
     <string>development</string>
 </dict>

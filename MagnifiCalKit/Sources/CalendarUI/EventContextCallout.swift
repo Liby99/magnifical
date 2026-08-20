@@ -338,38 +338,3 @@ struct SpaceContextCallout: View {
         .frame(width: 172)
     }
 }
-
-struct MenuRow: View { // internal (was private): reused by the PROJ row callout (NativeProjPanel)
-    let label: String
-    let icon: String
-    let key: String?
-    let destructive: Bool
-    var disabled: Bool = false
-    let theme: Theme
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 11.5))
-                    .frame(width: 15)
-                Text(label).font(.system(size: 12.5))
-                Spacer(minLength: 12)
-                if let key {
-                    Text(key).font(.system(size: 10.5)).foregroundStyle(.secondary)
-                }
-            }
-            .foregroundStyle(disabled ? theme.text.opacity(0.35) : (destructive ? Color.red : theme.text))
-            .padding(.horizontal, 7).padding(.vertical, 4.5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 6)
-                .fill(hovering && !disabled ? theme.text.opacity(0.09) : .clear))
-            .contentShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .onHover { hovering = $0 }
-    }
-}

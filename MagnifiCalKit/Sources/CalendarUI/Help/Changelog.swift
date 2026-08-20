@@ -43,6 +43,17 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.3.1", date: "August 20, 2026",
+            headline: "A lighter app, visible sync, and the calendar in your menu bar.",
+            changes: [
+                .init(.improved, "**~12MB lighter** — tutorial demos are compact videos now (sharper than the old GIFs), and Help demos/screenshots stream on first view instead of shipping in the app."),
+                .init(.improved, "The **menu-bar item** is a calendar (not the AI sparkles): *Open MagnifiCal* on top, plus *Past Conversations* — the chat with its history sidebar already open."),
+                .init(.fixed, "**iCloud sync** logs its lifecycle and failures instead of silently swallowing them, and Settings ▸ Developer gains *Push Everything to iCloud* to re-offer a calendar + the registry to the server."),
+                .init(.added, "**iPhone**: the dashboard drawer — TODO / PROJ / NOTE as a read-only bottom sheet following your zoom level — and a Settings ▸ MagnifiCal pane."),
+                .init(.fixed, "**iPhone**: a fresh install adopts your primary cloud calendar instead of showing an empty default forever."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.3.0", date: "August 19, 2026",
             headline: "Markdown tags, timeline edge indicators, and a fully native editor.",
             changes: [

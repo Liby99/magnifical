@@ -51,6 +51,9 @@ struct CalendarPhoneApp: App {
         Layout.bottomPad = 104
         // Larger event titles: only a screenful of cells is visible at a time on the phone.
         BandStyle.titleSize = 15
+        // The dashboard drawer is READ-ONLY on the phone (no editing anywhere): panel writes
+        // (checkbox toggles, row menus, quick-add) no-op. Write-once, like the Layout knobs.
+        NativeDash.readOnly = true
 
         // Bench mode (CC_DEMO=bench-*, set in the MagnifiCalPhoneBench scheme): stage the payload
         // into the throwaway Documents/bench-store dir BEFORE the engine loads — the ItemStore
@@ -149,7 +152,35 @@ struct CalendarPhoneApp: App {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 engine.syncNow() // fetch-only under cloudReadOnly
+                PhoneSettingsBridge.apply(engine) // consume + publish Settings ▸ MagnifiCal
             }
         }
+    }
+}
+
+/// The app's half of Settings ▸ MagnifiCal (Settings.bundle): system Settings pages are STATIC
+/// plists over UserDefaults, so the app PUBLISHES live state into read-only rows and CONSUMES
+/// the one writable field on every foreground. Calendar switching = type a name into "Switch
+/// to", reopen the app; the bridge matches it (case/whitespace-insensitive) and switches.
+enum PhoneSettingsBridge {
+    @MainActor static func apply(_ engine: CalendarEngine) {
+        let d = UserDefaults.standard
+        // Consume a pending switch request first, so the publish below reflects the result.
+        let req = (d.string(forKey: "cc.settings.requestedCalendar") ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !req.isEmpty {
+            d.removeObject(forKey: "cc.settings.requestedCalendar") // one-shot
+            if let match = engine.allCalendars.first(where: { $0.name.lowercased() == req.lowercased() }),
+               match.id != engine.activeCalendar?.id {
+                engine.switchCalendar(to: match.id)
+            }
+        }
+        // Publish the live state the static page displays.
+        d.set(engine.activeCalendar?.name ?? "Main", forKey: "cc.settings.activeCalendarName")
+        d.set(engine.allCalendars.map(\.name).joined(separator: ", "),
+              forKey: "cc.settings.calendarList")
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        d.set("\(v) (\(b))", forKey: "cc.settings.version")
     }
 }

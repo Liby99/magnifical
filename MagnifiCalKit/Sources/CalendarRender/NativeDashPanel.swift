@@ -9,31 +9,51 @@
 
 import CalendarEngine
 import CalendarGeometry
-import CalendarRender
 import SwiftUI
 
-/// The pointing-hand cursor on hover, set DIRECTLY via NSCursor — SwiftUI's pointerStyle was
-/// silently ineffective under the app's window-spanning input-catcher tracking areas. Works
-/// because the catcher yields the cursor over the native panel (CalendarInputLayer.mouseMoved).
-private struct HandCursor: ViewModifier {
-    func body(content: Content) -> some View {
-        content.onHover { inside in
-            if inside {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
+#if os(macOS)
+    /// The pointing-hand cursor on hover, set DIRECTLY via NSCursor — SwiftUI's pointerStyle was
+    /// silently ineffective under the app's window-spanning input-catcher tracking areas. Works
+    /// because the catcher yields the cursor over the native panel (CalendarInputLayer.mouseMoved).
+    private struct HandCursor: ViewModifier {
+        func body(content: Content) -> some View {
+            content.onHover { inside in
+                if inside {
+                    NSCursor.pointingHand.set()
+                } else {
+                    NSCursor.arrow.set()
+                }
             }
         }
     }
-}
 
-extension View {
-    func handCursor() -> some View {
-        modifier(HandCursor())
+    public extension View {
+        func handCursor() -> some View {
+            modifier(HandCursor())
+        }
+    }
+#else
+    public extension View {
+        /// Pointer affordance — a no-op on touch platforms (there is no cursor to shape).
+        func handCursor() -> some View {
+            self
+        }
+    }
+#endif
+
+/// Per-OS menu chrome: .borderlessButton is the macOS look; iOS has no such style (the default
+/// Menu presentation is already borderless there).
+private extension View {
+    @ViewBuilder func dashMenuStyle() -> some View {
+        #if os(macOS)
+            menuStyle(.borderlessButton)
+        #else
+            self
+        #endif
     }
 }
 
-enum NativeDash {
+public enum NativeDash {
     // The native dashboard is THE dashboard: the WKWebView fallback (and its
     // cc.nativeDashOff / CC_NATIVE_DASH_OFF kill switches) was retired to legacy/ in
     // phase 4a, 2026-08-02.
@@ -43,8 +63,8 @@ enum NativeDash {
     /// can land as a click on whatever row the cursor hovers — zooming then "clicked" a todo
     /// and flew to its definition. The pinch handlers stamp this clock; row activations
     /// (open/jump/toggle) are ignored while a pinch is in flight or just ended.
-    @MainActor static var lastPinch: Date = .distantPast
-    @MainActor static var tapsSuppressed: Bool {
+    @MainActor public static var lastPinch: Date = .distantPast
+    @MainActor public static var tapsSuppressed: Bool {
         Date().timeIntervalSince(lastPinch) < 0.35
     }
 
@@ -53,22 +73,27 @@ enum NativeDash {
     /// carousels REAL content with no rebuild — the mount cost (row view creation + text
     /// layout, the real-store flamegraph's remaining block) is paid once per key, not per
     /// visit. Content is NEVER gated: every mounted panel renders fully (no blank slots).
-    @MainActor static var parkedPanels: [DashBodyPanel] = []
-    @MainActor static var lastLiveIds: Set<String> = [] // change-gate for the per-frame bookkeeping
+    @MainActor public static var parkedPanels: [DashBodyPanel] = []
+    @MainActor public static var lastLiveIds: Set<String> = [] // change-gate for the per-frame bookkeeping
     /// Panels pre-built while the dashboard is RETRACTED (or at year) — these warm ALL tabs
     /// (the first-⌘J case). Mid-tour neighbor pre-builds stay single-tab: their mounts land
     /// inside fast swipe sequences, where a triple build regressed the tours.
-    @MainActor static var warmIds: Set<String> = []
+    @MainActor public static var warmIds: Set<String> = []
     /// Settled-panel dwell tracking: the CURRENT panel warms its unvisited tabs only after a
     /// SUSTAINED rest (0.5s) — warming on any momentary settle re-created the swipe-tour
     /// regression (mounts landing inside the next gesture).
-    @MainActor static var settledSince: (id: String, at: Date)?
+    @MainActor public static var settledSince: (id: String, at: Date)?
+
+    /// READ-ONLY panels (the iPhone drawer): checkbox toggles, row-menu writes, and quick-add
+    /// all no-op — set ONCE at launch by the phone app (like the Layout knobs; the Mac never
+    /// touches it). Display + navigation (deadline reveal, fold, open) stay live.
+    @MainActor public static var readOnly = false
 
     /// CC_DASH_DIAG=1: keep the >50ms main-thread tripwires (diagTime) armed.
-    static let diag = ProcessInfo.processInfo.environment["CC_DASH_DIAG"] != nil
+    public static let diag = ProcessInfo.processInfo.environment["CC_DASH_DIAG"] != nil
 
     /// Time a suspect on the main thread; prints only when it exceeds 50ms (diag builds).
-    static func diagTime<T>(_ label: String, _ work: () -> T) -> T {
+    public static func diagTime<T>(_ label: String, _ work: () -> T) -> T {
         guard diag else { return work() }
         let t0 = Date()
         let out = work()
@@ -79,7 +104,7 @@ enum NativeDash {
         return out
     }
 
-    @MainActor static func parkPanels(_ live: [DashBodyPanel]) {
+    @MainActor public static func parkPanels(_ live: [DashBodyPanel]) {
         for p in live {
             parkedPanels.removeAll { $0.panelId == p.panelId }
             parkedPanels.append(p)
@@ -92,7 +117,7 @@ enum NativeDash {
     /// The settled panel's ADJACENT keys (month ±1, week ±7d, day ±1d) — pre-mounted parked
     /// (op 0) while at rest, ONE per frame eval, so the first swipe toward a neighbor finds
     /// its panel already built instead of paying the mount on a gesture frame.
-    static func neighborPanels(of p: DashBodyPanel) -> [DashBodyPanel] {
+    public static func neighborPanels(of p: DashBodyPanel) -> [DashBodyPanel] {
         func with(_ key: String) -> DashBodyPanel {
             DashBodyPanel(scope: p.scope, key: key, x: p.x, w: p.w, dx: 0, dy: p.dy, op: 0)
         }
@@ -117,13 +142,13 @@ enum NativeDash {
     }
 
     /// Keep nav-row registry entries only for panels still in the view tree (parked + live).
-    @MainActor static func trimNavRows(_ nav: NativeDashNavModel, liveIds: Set<String>) {
+    @MainActor public static func trimNavRows(_ nav: NativeDashNavModel, liveIds: Set<String>) {
         let keep = liveIds.union(parkedPanels.map(\.panelId))
         nav.rowsByPanel = nav.rowsByPanel.filter { keep.contains($0.key) }
     }
 }
 
-struct NativeDashPanel: View {
+public struct NativeDashPanel: View {
     let engine: CalendarEngine
     let scope: String // "week" | "month"
     let key: String // week: the Sunday's ISO; month: "YYYY-MM"
@@ -135,6 +160,30 @@ struct NativeDashPanel: View {
     /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
     /// — the confirm's blur must cover the WHOLE window, not just this panel.
     var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+
+    /// Deadline-row reveal override (the iPhone drawer dismisses itself before flying the
+    /// canvas; nil — the Mac — keeps the direct engine.revealAndSelect).
+    var onReveal: ((String) -> Void)?
+
+    /// Explicit init mirroring the old memberwise defaults (public — the module boundary
+    /// dropped the free memberwise init when the panel moved to CalendarRender).
+    public init(engine: CalendarEngine, scope: String, key: String, theme: Theme,
+                settings: DashTodoSettings? = nil, nav: NativeDashNavModel? = nil,
+                onOpen: @escaping (String, Int?, String?) -> Void,
+                onJump: @escaping (String, Int?) -> Void = { _, _ in },
+                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in },
+                onReveal: ((String) -> Void)? = nil) {
+        self.engine = engine
+        self.scope = scope
+        self.key = key
+        self.theme = theme
+        self.settings = settings
+        self.nav = nav
+        self.onOpen = onOpen
+        self.onJump = onJump
+        self.onDeleteRequest = onDeleteRequest
+        self.onReveal = onReveal
+    }
 
     @State private var doneOpen: Set<String> = [] // per-view completed expansion (session-scoped)
     private static let doneShow = 10
@@ -168,7 +217,7 @@ struct NativeDashPanel: View {
     @State private var frozen: Frozen?
     @State private var deadlineRange = NativeDashPanel.dayDeadlineRange // day deadline window
 
-    var body: some View {
+    public var body: some View {
         // OBSERVABLE dependency on note content (NoteEditGen): external note writes at REST
         // (quick-add, row-menu edits, another panel's toggle) repaint through Observation —
         // wake()'s ticks can be ZERO on an idle ProMotion display (see NativeProjPanel).
@@ -227,23 +276,26 @@ struct NativeDashPanel: View {
             }
         }
         .coordinateSpace(name: Self.rowSpaceName)
-        // ONE AppKit right-click layer per panel (the ChartMouseLayer pattern): rows are
-        // VARIABLE-HEIGHT (subtrees — no grid math), so the layer resolves the clicked row
-        // from the frames the rows themselves report into rowFrames, and consumes the event.
-        // Non-row right-clicks fall through to the .contextMenu below.
-        .background(DashRightClickLayer(frames: rowFrames, onHit: { todo, rect in
-            rowMenu = RowMenu(todo: todo, rect: rect)
-        }))
-        .popover(isPresented: rowMenuShown,
-                 attachmentAnchor: .rect(.rect(rowMenu?.rect ?? .zero)),
-                 arrowEdge: .trailing) {
-            if let m = rowMenu {
-                rowCallout(m, live: live)
+        #if os(macOS)
+            // ONE AppKit right-click layer per panel (the ChartMouseLayer pattern): rows are
+            // VARIABLE-HEIGHT (subtrees — no grid math), so the layer resolves the clicked row
+            // from the frames the rows themselves report into rowFrames, and consumes the event.
+            // Non-row right-clicks fall through to the .contextMenu below. iOS compiles this
+            // out — the row menu is a pointer affordance (the phone client is read-only).
+            .background(DashRightClickLayer(frames: rowFrames, onHit: { todo, rect in
+                rowMenu = RowMenu(todo: todo, rect: rect)
+            }))
+            .popover(isPresented: rowMenuShown,
+                     attachmentAnchor: .rect(.rect(rowMenu?.rect ?? .zero)),
+                     arrowEdge: .trailing) {
+                if let m = rowMenu {
+                    rowCallout(m, live: live)
+                }
             }
-        }
-        // Right-click anywhere OUTSIDE a row = the cog's layering menu (single-sourced from
-        // DashTodoCatalog, writing through DashTodoSettings — same as the webview's popup).
-        .contextMenu { prefsMenu }
+        #endif
+            // Right-click anywhere OUTSIDE a row = the cog's layering menu (single-sourced from
+            // DashTodoCatalog, writing through DashTodoSettings — same as the webview's popup).
+            .contextMenu { prefsMenu }
     }
 
     private var rowMenuShown: Binding<Bool> {
@@ -302,7 +354,7 @@ struct NativeDashPanel: View {
 
     /// A todo's soft-link identity (note scope + line) — stable across a toggle, unlike tieKey
     /// (whose raw-line component changes when `[ ]` flips or a done: stamp lands).
-    static func anchor(_ t: ParsedTodo) -> String {
+    public static func anchor(_ t: ParsedTodo) -> String {
         "\(TodoFeed.scopeKey(t))\0\(t.line)"
     }
 
@@ -455,7 +507,7 @@ struct NativeDashPanel: View {
         }
     }
 
-    static func todayIso() -> String {
+    public static func todayIso() -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         return String(format: "%04d-%02d-%02d", c.year ?? 2000, c.month ?? 1, c.day ?? 1)
     }
@@ -505,14 +557,14 @@ struct NativeDashPanel: View {
 
     /// The day scope's deadline window (the web's cc-dd-range dropdown). Session-global like the
     /// webview's module variable — panels re-key per day, so per-panel @State would reset daily.
-    @MainActor static var dayDeadlineRange = "d30"
-    static let dayDeadlineOpts: [(String, String)] = [
+    @MainActor public static var dayDeadlineRange = "d30"
+    public static let dayDeadlineOpts: [(String, String)] = [
         ("week", "This week"), ("month", "This month"), ("d30", "30 days"),
         ("m3", "3 months"), ("m6", "6 months"),
     ]
 
     /// The last day (inclusive) to show deadlines through (ports deadlineWindowEnd).
-    static func dayDeadlineEnd(_ viewIso: String, range: String) -> String {
+    public static func dayDeadlineEnd(_ viewIso: String, range: String) -> String {
         let p = viewIso.split(separator: "-").compactMap { Int($0) }
         guard p.count == 3,
               let d0 = utcCalendar.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))
@@ -561,7 +613,7 @@ struct NativeDashPanel: View {
                                 .font(.system(size: 10))
                                 .foregroundStyle(theme.textMuted)
                         }
-                        .menuStyle(.borderlessButton)
+                        .dashMenuStyle()
                         .fixedSize()
                     }
                 }
@@ -573,7 +625,11 @@ struct NativeDashPanel: View {
                 ForEach(list, id: \.0.id) { d, iso in
                     DeadlineRowView(deadline: d, label: "\(Self.relDue(today, iso)) · \(Self.hhmm(d.hour))",
                                     theme: theme) {
-                        engine.revealAndSelect(id: d.id)
+                        if let onReveal {
+                            onReveal(d.id) // phone: dismiss the drawer, then fly
+                        } else {
+                            engine.revealAndSelect(id: d.id)
+                        }
                     }
                 }
             }
@@ -584,8 +640,9 @@ struct NativeDashPanel: View {
 
     /// Flip a todo's checkbox in its source note (done-stamped), through the engine's own write
     /// paths. Shared by the TODO and PROJ panels.
-    static func toggleTodo(_ engine: CalendarEngine, _ t: ParsedTodo) {
+    public static func toggleTodo(_ engine: CalendarEngine, _ t: ParsedTodo) {
         guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
+        guard !NativeDash.readOnly else { return } // the iPhone drawer never writes
 
         let stamp = todayIso() + "T" + clockNow()
         rewriteTodoLine(engine, t) { TodoIndex.toggleTodoLine($0, line: $1, stamp: stamp) }
@@ -595,8 +652,9 @@ struct NativeDashPanel: View {
     /// occurrence / event note). `transform` is one of TodoIndex's pure line rewrites, called
     /// with (current note, the todo's 1-based line) → new note (nil = stale anchor, same note =
     /// no-op). Shared by the checkbox toggle and the PROJ row menu's token writes.
-    static func rewriteTodoLine(_ engine: CalendarEngine, _ t: ParsedTodo,
-                                _ transform: (String, Int) -> String?) {
+    public static func rewriteTodoLine(_ engine: CalendarEngine, _ t: ParsedTodo,
+                                       _ transform: (String, Int) -> String?) {
+        guard !NativeDash.readOnly else { return } // the iPhone drawer never writes
         if t.source == "daily" {
             let key = t.dailyDate ?? ""
             let cur = engine.dailyNote(key)
@@ -635,20 +693,20 @@ struct NativeDashPanel: View {
         }
     }
 
-    static func clockNow() -> String {
+    public static func clockNow() -> String {
         let c = Calendar.current.dateComponents([.hour, .minute, .second], from: Date())
         return String(format: "%02d:%02d:%02d", c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
     }
 
     /// The web's finishedLabel: relative done-day + the stamp's wall time when present.
-    static func finishedLabel(_ viewIso: String, _ stamp: String) -> String {
+    public static func finishedLabel(_ viewIso: String, _ stamp: String) -> String {
         let rel = relDue(viewIso, String(stamp.prefix(10)))
         guard stamp.count >= 16 else { return rel }
         return "\(rel) · \(stamp.dropFirst(11).prefix(5))"
     }
 
     /// "today" / "3d over" / "in 3d" / the date — a compact relative-due label.
-    static func relDue(_ today: String, _ iso: String) -> String {
+    public static func relDue(_ today: String, _ iso: String) -> String {
         guard iso.count >= 10 else { return iso }
         let d = String(iso.prefix(10))
         if d == today {
@@ -667,7 +725,7 @@ struct NativeDashPanel: View {
     /// Memoized — Calendar/DateComponents math showed up per-row in the real-store profile
     /// (relDue runs for every row render); the same few (today, due) pairs repeat constantly.
     @MainActor private static var daysCache: [String: Int] = [:]
-    @MainActor static func daysBetween(_ a: String, _ b: String) -> Int {
+    @MainActor public static func daysBetween(_ a: String, _ b: String) -> Int {
         let key = a + "|" + b
         if let hit = daysCache[key] {
             return hit
@@ -686,7 +744,7 @@ struct NativeDashPanel: View {
         return d
     }
 
-    static func hhmm(_ hour: CGFloat) -> String {
+    public static func hhmm(_ hour: CGFloat) -> String {
         let t = Int((hour * 60).rounded())
         return String(format: "%02d:%02d", (t / 60) % 24, t % 60)
     }
@@ -721,85 +779,87 @@ private struct RowFrameReporter: View {
     }
 }
 
-/// ONE background NSView per panel with a LOCAL rightMouseDown monitor (the ChartMouseLayer
-/// pattern — SwiftUI content above eats hit-tests, monitors don't care). The view fills the
-/// panel root, so its flipped local coordinates ARE the named panel space the rows report in;
-/// a click landing inside a reported row rect opens the callout and consumes the event, all
-/// other clicks pass through (the panel's .contextMenu keeps the layering menu).
-private struct DashRightClickLayer: NSViewRepresentable {
-    let frames: TodoRowFrameStore
-    var onHit: (ParsedTodo, CGRect) -> Void
+#if os(macOS)
+    /// ONE background NSView per panel with a LOCAL rightMouseDown monitor (the ChartMouseLayer
+    /// pattern — SwiftUI content above eats hit-tests, monitors don't care). The view fills the
+    /// panel root, so its flipped local coordinates ARE the named panel space the rows report in;
+    /// a click landing inside a reported row rect opens the callout and consumes the event, all
+    /// other clicks pass through (the panel's .contextMenu keeps the layering menu).
+    private struct DashRightClickLayer: NSViewRepresentable {
+        let frames: TodoRowFrameStore
+        var onHit: (ParsedTodo, CGRect) -> Void
 
-    func makeNSView(context _: Context) -> Layer {
-        let v = Layer()
-        apply(to: v)
-        return v
-    }
-
-    func updateNSView(_ v: Layer, context _: Context) {
-        apply(to: v)
-    }
-
-    private func apply(to v: Layer) {
-        v.frames = frames
-        v.onHit = onHit
-    }
-
-    final class Layer: NSView {
-        var frames: TodoRowFrameStore?
-        var onHit: ((ParsedTodo, CGRect) -> Void)?
-
-        override var isFlipped: Bool {
-            true
-        } // top-left origin, like the SwiftUI space the rows report in
-
-        /// Never the hit-test target: left clicks belong to the SwiftUI rows above.
-        override func hitTest(_: NSPoint) -> NSView? {
-            nil
+        func makeNSView(context _: Context) -> Layer {
+            let v = Layer()
+            apply(to: v)
+            return v
         }
 
-        /// Parked/warmed twins of this panel stay mounted at opacity 0 — their monitors must
-        /// not steal the live panel's right-clicks.
-        private var effectivelyVisible: Bool {
-            guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
-            var l = layer
-            while let cur = l {
-                if cur.opacity < 0.01 {
-                    return false
-                }
-                l = cur.superlayer
+        func updateNSView(_ v: Layer, context _: Context) {
+            apply(to: v)
+        }
+
+        private func apply(to v: Layer) {
+            v.frames = frames
+            v.onHit = onHit
+        }
+
+        final class Layer: NSView {
+            var frames: TodoRowFrameStore?
+            var onHit: ((ParsedTodo, CGRect) -> Void)?
+
+            override var isFlipped: Bool {
+                true
+            } // top-left origin, like the SwiftUI space the rows report in
+
+            /// Never the hit-test target: left clicks belong to the SwiftUI rows above.
+            override func hitTest(_: NSPoint) -> NSView? {
+                nil
             }
-            return true
-        }
 
-        private var rightClickMonitor: Any?
+            /// Parked/warmed twins of this panel stay mounted at opacity 0 — their monitors must
+            /// not steal the live panel's right-clicks.
+            private var effectivelyVisible: Bool {
+                guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
+                var l = layer
+                while let cur = l {
+                    if cur.opacity < 0.01 {
+                        return false
+                    }
+                    l = cur.superlayer
+                }
+                return true
+            }
 
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window == nil {
+            private var rightClickMonitor: Any?
+
+            override func viewDidMoveToWindow() {
+                super.viewDidMoveToWindow()
+                if window == nil {
+                    if let m = rightClickMonitor {
+                        NSEvent.removeMonitor(m)
+                        rightClickMonitor = nil
+                    }
+                } else if rightClickMonitor == nil {
+                    rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
+                        [weak self] e in
+                        guard let self, e.window === self.window, self.effectivelyVisible else { return e }
+                        let p = self.convert(e.locationInWindow, from: nil)
+                        guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
+                        self.onHit?(todo, CGRect(x: p.x, y: p.y, width: 1, height: 1))
+                        return nil // consumed — no pass-through context menus underneath
+                    }
+                }
+            }
+
+            deinit {
                 if let m = rightClickMonitor {
                     NSEvent.removeMonitor(m)
-                    rightClickMonitor = nil
                 }
-            } else if rightClickMonitor == nil {
-                rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
-                    [weak self] e in
-                    guard let self, e.window === self.window, self.effectivelyVisible else { return e }
-                    let p = self.convert(e.locationInWindow, from: nil)
-                    guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
-                    self.onHit?(todo, CGRect(x: p.x, y: p.y, width: 1, height: 1))
-                    return nil // consumed — no pass-through context menus underneath
-                }
-            }
-        }
-
-        deinit {
-            if let m = rightClickMonitor {
-                NSEvent.removeMonitor(m)
             }
         }
     }
-}
+#endif
 
 /// A section header: uppercase title, count badge, optional "+N more" hint + expansion chevron
 /// (the PROJ panel's disclosure language). Shared with NativeProjPanel.

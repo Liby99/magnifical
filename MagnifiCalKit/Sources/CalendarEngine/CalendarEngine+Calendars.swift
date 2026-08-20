@@ -180,6 +180,15 @@ public extension CalendarEngine {
     /// Merge a remote calendar-list change: add/rename entries, and remove deleted ones. If the OPEN
     /// calendar was deleted elsewhere, switch to a fallback first (never persist the doomed calendar).
     func applyRemoteCalendars(upserts: [CalendarMeta], deletes: [String]) {
+        // VIRGIN-DEVICE ADOPTION (evaluated BEFORE the upserts land): a fresh install boots on
+        // the bootstrap default ("Main" — empty, and typically absent from the cloud registry)
+        // and nothing ever activated a real calendar, so the device rendered an empty calendar
+        // forever while the data sat in cal-… zones (the 2026-08 phone bring-up). If this
+        // device knows ONLY the untouched default, adopt the primary cloud calendar when the
+        // registry fetch delivers one.
+        let virgin = registry.activeId == CalendarRegistry.mainId
+            && registry.all.map(\.id) == [CalendarRegistry.mainId]
+            && liveItemCount == 0
         for m in upserts {
             registry.upsertRemote(m)
         }
@@ -189,6 +198,21 @@ public extension CalendarEngine {
                 switchCalendar(to: fallback, persistCurrent: false)
             }
             registry.remove(id)
+        }
+        if virgin,
+           let adopt = upserts.filter({ $0.id != CalendarRegistry.mainId })
+           .min(by: { ($0.order, $0.createdAt) < ($1.order, $1.createdAt) }) {
+            cloudLog
+                .notice(
+                    "Adopting cloud calendar \(adopt.id, privacy: .public) (\(adopt.name, privacy: .public)) — fresh device was on the pristine default"
+                )
+            switchCalendar(to: adopt.id, persistCurrent: false)
+            // The untouched bootstrap default would linger as a dead entry in the switcher.
+            // Read-only devices never push, so dropping it locally is free; writable devices
+            // keep it (their first-run push may already have offered it to the registry).
+            if cloudReadOnly {
+                registry.remove(CalendarRegistry.mainId)
+            }
         }
         wake()
     }
