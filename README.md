@@ -4,7 +4,7 @@
 
 <h1 align="center">MagnifiCal</h1>
 
-<p align="center">MagnifiCal is a calendar for macOS that you navigate by zooming.</p>
+<p align="center">MagnifiCal is a calendar for Mac that you navigate by zooming.</p>
 
 <p align="center">
   <picture>
@@ -13,55 +13,36 @@
   </picture>
 </p>
 
-## Features
+## What it does
 
-- One continuous canvas: pinch between year, month, week, and day — the layout re-forms at each level instead of switching screens.
-- Multi-day events live on year-view track lanes; timed events on the week and day timelines.
-- Every event and every day holds Markdown notes with to-do items; dashboards collect them into a TODO list, a notes editor, and project gantt views (⌘B / ⌘E / ⌘J).
-- Local-first: your data is on-disk JSON, synced across your Macs and iPhone through your own iCloud. No accounts, no servers, no analytics.
-- Shows your Apple Calendar, Google Calendar, and Outlook events read-only — hide, recolor, annotate, or promote them without touching the originals.
-- An optional AI assistant that reads and edits the calendar through audited tools, using any OpenAI-compatible endpoint with keys you provide (stored in the macOS Keychain).
-- Designed for macOS 15 and above, with Liquid Glass rendering on macOS 26.
+- **One continuous canvas.** Pinch to glide from the whole year down to a single day — the calendar re-forms as you zoom instead of switching between separate screens.
+- **The big picture and the small one.** Trips, deadlines, and long-running plans stretch across the year view; your day's schedule sits on an hourly timeline.
+- **Notes and to-dos, everywhere.** Every event and every day can hold notes and checklists, and dashboards gather them up: a to-do list, a notepad, and a timeline for each of your projects.
+- **Your calendar stays yours.** Everything lives on your own Mac and syncs to your other devices through your own iCloud. No accounts, no servers, no tracking.
+- **Plays well with your other calendars.** See your Apple Calendar, Google Calendar, and Outlook events alongside your own — hide, recolor, or annotate them without changing the originals.
+- **An optional AI assistant.** Ask questions about your schedule or have it make changes for you. It's entirely optional and off until you set it up.
+- **At home on your devices.** Works on macOS 15 and later, with a companion iPhone app for viewing your calendar on the go.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/media/readme/band-year-dark.gif">
-    <img src="MagnifiCalKit/media/readme/band-year-light.gif" width="49%" alt="Band events on the year view">
+    <img src="MagnifiCalKit/media/readme/band-year-light.gif" width="49%" alt="Multi-day events across the year view">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="MagnifiCalKit/media/readme/markdown-notes-dark.gif">
-    <img src="MagnifiCalKit/media/readme/markdown-notes-light.gif" width="49%" alt="Markdown notes on an event">
+    <img src="MagnifiCalKit/media/readme/markdown-notes-light.gif" width="49%" alt="Notes and to-dos on an event">
   </picture>
 </p>
 
 ## Getting MagnifiCal
 
-You can get MagnifiCal through several sources:
-
-- The [releases page](../../releases/latest) — a notarized DMG.
-- The Mac App Store — identical to the free version; a way to support development.
-- Building from source (below).
-
-MagnifiCal is free software. Its iPhone companion (a read-only viewer) is available through TestFlight.
-
-## Building from source
-
-The calendar itself lives in a Swift package; the app targets are thin shells around it.
-
-```sh
-# Engine, renderer, and UI — no signing required:
-cd MagnifiCalKit
-swift build && swift test
-
-# The macOS and iOS apps:
-open MagnifiCalApp/MagnifiCalApp.xcodeproj
-```
-
-The package layering is the map: `CalendarGeometry` (pure layout math) → `CalendarEngine` (state, persistence, sync) → `CalendarRender` (canvas renderer) → `CalendarUI` (shell). Design notes for each subsystem are in `docs/`.
+- Download it free from the [releases page](../../releases/latest) — it keeps itself up to date.
+- Or get it on the Mac App Store — the same app; buying it is a way to support development.
+- The iPhone companion is available through TestFlight.
 
 ## Contributing
 
-MagnifiCal is always looking for contributions, whether through bug reports, code, or ideas — see [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test workflow and what makes a PR easy to merge. Issues labeled [`good first issue`](../../labels/good%20first%20issue) are a reasonable place to start. Contributions include a one-time CLA signature, handled automatically on the pull request.
+MagnifiCal is free, open-source software, and contributions are always welcome — bug reports, ideas, or code. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started; issues labeled [`good first issue`](../../labels/good%20first%20issue) are a good place to begin.
 
 ## License
 
