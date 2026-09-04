@@ -7,7 +7,7 @@
 // non-hit-testing render layers), so iOS's own touch physics and rubber-banding drive the
 // engine's overscroll-pull flips directly.
 //
-// Snap behaviors (MonthPagingBehavior / WeekScrollBehavior / DayScrollBehavior) come from
+// The week snap behavior (WeekScrollBehavior) comes from
 // CalendarRender, shared verbatim with the Mac so both platforms page with the same feel.
 
 import CalendarEngine
@@ -198,7 +198,7 @@ private struct QuarterStrip: View {
 }
 
 /// Month view: an outer VERTICAL pager (12 pages, one per month — swipe up/down to turn,
-/// the Mac's MonthPagingBehavior supplies the feel) nested with an inner HORIZONTAL strip
+/// native .paging supplies the feel) nested with an inner HORIZONTAL strip
 /// over the focused month's 31 min-width day columns. UIKit's nested-scroll arbitration
 /// axis-locks the two: vertical pans page months, horizontal pans scroll days.
 private struct PhoneMonthDriver: View {
@@ -232,7 +232,12 @@ private struct PhoneMonthDriver: View {
         // Initial-layout landing on the focused month's page (see PhoneYearDriver): content
         // is 12 pages, scrollable range 11 — fraction focus/11 puts page `focus` at the top.
         .defaultScrollAnchor(UnitPoint(x: 0, y: CGFloat(engine.focus) / 11))
-        .scrollTargetBehavior(MonthPagingBehavior()) // one gesture = at most one month
+        // NATIVE paging (the day pager's cure, applied to months): the custom
+        // MonthPagingBehavior picked the right page but let SwiftUI keep the natural
+        // fling's deceleration DURATION while traveling only one page — the slow-crawl
+        // settle. UIKit pager physics snap crisply; one gesture still turns at most one
+        // page, clamped to the 12 months. (The Mac's pager keeps MonthPagingBehavior.)
+        .scrollTargetBehavior(.paging)
         .scrollBounceBehavior(.always)
         .scrollIndicators(.hidden)
         .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentInsets.top }) { _, v in

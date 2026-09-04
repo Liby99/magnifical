@@ -462,22 +462,16 @@ public struct CalendarView: View {
             // 3. deadlines: the moment line + dots are drawn in the Canvas… When the drawer is open the
             // SELECTED deadline is HIDDEN here (drawn sharp in the lift below, like band/timed events).
             let liftDdl = ui.openEventId != nil ? engine.selectedId : nil
-            Canvas { ctx, _ in
-                var c = ctx
-                c.translateBy(x: sceneDX, y: 0)
-                RenderProf.measure("drawMid", "3_drawMid") {
-                    SceneRenderer.drawMid(
-                        input: input,
-                        deadlines: engine.viewDeadlines(),
-                        selected: engine.selectedId,
-                        drawerOpen: ui.openEventId != nil,
-                        hovered: engine.hoveredEventId,
-                        hide: liftDdl,
-                        in: &c,
-                        theme: theme
-                    )
-                }
-            }
+            // Equatable wrapper, NOT an inline `Canvas {}`: with the deadlines read inside the
+            // closure the canvas had no changing inputs during a label drag (static scene ⇒
+            // same SceneInput every frame), so it never re-recorded and the line froze while
+            // the pill followed the data. See MidDeadlinesCanvas.
+            MidDeadlinesCanvas(input: input, deadlines: engine.viewDeadlines(),
+                               selected: engine.selectedId,
+                               drawerOpen: ui.openEventId != nil,
+                               hovered: engine.hoveredEventId,
+                               hide: liftDdl, sceneDX: sceneDX, theme: theme)
+                .equatable()
             // …and the labels are SwiftUI glass pills (activation styling), above the line.
             DeadlinesOverlay(input: input, deadlines: engine.viewDeadlines(),
                              sides: engine.deadlineSides(),
@@ -811,12 +805,11 @@ public struct CalendarView: View {
     private func liftedDeadline(sel: String, theme: Theme) -> some View {
         let input = engine.snapshotInput()
         ZStack(alignment: .topLeading) {
-            Canvas { ctx, _ in
-                var c = ctx
-                c.translateBy(x: Layout.padLeft - engine.drawerShift - engine.gutterShift, y: 0)
-                SceneRenderer.drawMid(input: input, deadlines: engine.viewDeadlines(), selected: sel,
-                                      drawerOpen: true, hovered: nil, only: sel, in: &c, theme: theme)
-            }
+            MidDeadlinesCanvas(input: input, deadlines: engine.viewDeadlines(), selected: sel,
+                               drawerOpen: true, hovered: nil, only: sel,
+                               sceneDX: Layout.padLeft - engine.drawerShift - engine.gutterShift,
+                               theme: theme)
+                .equatable()
             DeadlinesOverlay(input: input, deadlines: engine.viewDeadlines(), sides: engine.deadlineSides(),
                              selected: sel, hovered: nil, drawerOpen: true, only: sel, theme: theme)
                 .offset(x: Layout.padLeft - engine.drawerShift - engine.gutterShift)

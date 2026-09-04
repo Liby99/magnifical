@@ -4,6 +4,61 @@
 import CalendarGeometry
 import SwiftUI
 
+/// The deadline moment-lines + end-dots Canvas (SceneRenderer.drawMid), EQUATABLE-wrapped.
+///
+/// Why the wrapper exists (regression 2026-09): the old inline `Canvas { … drawMid(…) }` read
+/// `engine.viewDeadlines()` INSIDE the closure, so the view had no data-bearing fields — and a
+/// SwiftUI Canvas only re-records when ITS inputs change. While a deadline label is dragged the
+/// rest of the scene is static (no scroll/zoom/hover churn ⇒ `input` identical every frame), so
+/// the canvas never re-recorded: the pill (DeadlinesOverlay, which takes the deadlines as a
+/// VALUE) followed the drag while the line stayed frozen at the mouse-down position. Keying ==
+/// on everything the draw reads makes the line re-record exactly when a deadline (or activation)
+/// changes — verified by MidDeadlinesCanvasTests + the ddl-drag recording.
+public struct MidDeadlinesCanvas: View, Equatable {
+    let input: SceneInput
+    let deadlines: [Deadline]
+    let selected: String?
+    let drawerOpen: Bool
+    let hovered: String?
+    let only: String? // drawer lift: draw ONLY this deadline (sharp, above the scrim)
+    let hide: String? // main scene while lifted: skip it
+    let sceneDX: CGFloat
+    let theme: Theme
+
+    public init(input: SceneInput, deadlines: [Deadline], selected: String?, drawerOpen: Bool,
+                hovered: String?, only: String? = nil, hide: String? = nil,
+                sceneDX: CGFloat, theme: Theme) {
+        self.input = input
+        self.deadlines = deadlines
+        self.selected = selected
+        self.drawerOpen = drawerOpen
+        self.hovered = hovered
+        self.only = only
+        self.hide = hide
+        self.sceneDX = sceneDX
+        self.theme = theme
+    }
+
+    public static func == (a: Self, b: Self) -> Bool {
+        a.input == b.input && a.deadlines == b.deadlines && a.selected == b.selected
+            && a.drawerOpen == b.drawerOpen && a.hovered == b.hovered && a.only == b.only
+            && a.hide == b.hide && a.sceneDX == b.sceneDX
+            && a.theme.dark == b.theme.dark && a.theme.accentDark == b.theme.accentDark
+    }
+
+    public var body: some View {
+        Canvas { ctx, _ in
+            var c = ctx
+            c.translateBy(x: sceneDX, y: 0)
+            RenderProf.measure("drawMid", "3_drawMid") {
+                SceneRenderer.drawMid(input: input, deadlines: deadlines, selected: selected,
+                                      drawerOpen: drawerOpen, hovered: hovered, only: only,
+                                      hide: hide, in: &c, theme: theme)
+            }
+        }
+    }
+}
+
 // ── Deadline labels: SwiftUI glass pills above the Canvas moment-line ─────────────────
 // The horizontal moment line + end dots are drawn in the Canvas (SceneRenderer.drawMid); this
 // renders the LABEL as a glass pill with the SAME five activation levels as events (tint by level;

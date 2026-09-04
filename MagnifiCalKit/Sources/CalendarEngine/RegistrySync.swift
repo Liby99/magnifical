@@ -72,8 +72,17 @@ final class RegistrySync: NSObject, CKSyncEngineDelegate {
     }
 
     /// Settings ▸ Developer ▸ "Push Everything to iCloud" (the calendar registry's half).
+    /// Drops the cached server records for the re-offered ids first: the cache can carry
+    /// ANOTHER environment's change tags (the dev↔prod split), which the server rejects as
+    /// "Unknown Item — recordChangeTag specified, but record not found" — the production
+    /// bring-up's last blocker. A fresh, tagless record creates cleanly; if the record DOES
+    /// exist server-side the send conflicts and the local-wins machinery re-sends over it.
     func pushEverything() {
         guard !readOnly, let engine else { return }
+        for c in engine.allCalendars {
+            knownRecords[c.id] = nil
+        }
+        saveRecordCache()
         enqueueFullPush(engine)
         syncNow()
     }
@@ -148,7 +157,14 @@ final class RegistrySync: NSObject, CKSyncEngineDelegate {
             cloudLog
                 .notice("RegistrySync fetched \(e.modifications.count) modifications, \(e.deletions.count) deletions")
             applyFetched(modifications: e.modifications, deletions: e.deletions)
-        case let .sentRecordZoneChanges(e): handleSent(e)
+        case let .sentRecordZoneChanges(e):
+            if !e.savedRecords.isEmpty || !e.deletedRecordIDs.isEmpty {
+                cloudLog
+                    .notice(
+                        "RegistrySync sent OK: \(e.savedRecords.count) saved, \(e.deletedRecordIDs.count) deleted (\(e.failedRecordSaves.count) failed)"
+                    )
+            }
+            handleSent(e)
         default: break
         }
     }
@@ -202,6 +218,19 @@ final class RegistrySync: NSObject, CKSyncEngineDelegate {
             case .zoneNotFound, .userDeletedZone:
                 syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
                 syncEngine.state.add(pendingRecordZoneChanges: [.saveRecord(id)])
+            case .unknownItem:
+                // Cross-environment change tag (see CloudSync.handleSent) — shed + re-offer once.
+                if knownRecords[id.recordName] != nil {
+                    knownRecords[id.recordName] = nil
+                    syncEngine.state.add(pendingRecordZoneChanges: [.saveRecord(id)])
+                    cloudLog
+                        .notice("RegistrySync shed stale change tag on \(id.recordName, privacy: .public), re-offering")
+                } else {
+                    cloudLog
+                        .error(
+                            "RegistrySync giving up on \(id.recordName, privacy: .public): unknownItem with no cached tag"
+                        )
+                }
             default: break
             }
         }
