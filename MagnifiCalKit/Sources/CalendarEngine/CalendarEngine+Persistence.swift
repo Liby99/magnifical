@@ -177,6 +177,19 @@ extension CalendarEngine {
                 upserts.append(k) // normal item: re-materialize its body with the new rich
             }
         }
+        // Daily/scope notes: their own DailyNote records (a cleared note = a server delete).
+        let oldNotes = old?.dailyNotes ?? [:], newNotes = new.dailyNotes ?? [:]
+        for k in Set(oldNotes.keys).union(newNotes.keys) {
+            let o = oldNotes[k], n = newNotes[k]
+            if o == n {
+                continue
+            }
+            if (n ?? "").isEmpty {
+                deletes.append(CloudSync.dnoteRecordName(forKey: k))
+            } else {
+                upserts.append(CloudSync.dnoteRecordName(forKey: k))
+            }
+        }
         let delSet = Set(deletes)
         upserts = Array(Set(upserts).subtracting(delSet))
         deletes = Array(delSet)
@@ -280,10 +293,24 @@ extension CalendarEngine {
     /// state, so it must not echo back out or land on the undo stack.
     public func applyRemote(events: [TimedEvent] = [], bands: [BandEvent] = [],
                             deadlines: [Deadline] = [], trackNames newNames: [[String]]? = nil,
-                            deletedIDs: [String] = [], rich: [String: RichFields] = [:]) {
+                            deletedIDs: [String] = [], rich: [String: RichFields] = [:],
+                            dailyNotes: [String: String] = [:]) {
         wake() // remote data landed → a render must run
         caches.editGen &+= 1
         caches.deadlineGen &+= 1 // remote change may add/move/remove deadlines
+        let noteDeletes = deletedIDs.compactMap(CloudSync.dnoteKey(fromRecordName:))
+        if !dailyNotes.isEmpty || !noteDeletes.isEmpty {
+            for (k, v) in dailyNotes {
+                items.dailyNotes[k] = v
+            }
+            for k in noteDeletes {
+                items.dailyNotes[k] = nil
+            }
+            // The notes' own generations (see setDailyNote): todo feeds rebuild, at-rest
+            // note previews repaint — without invalidating the event/band display caches.
+            caches.noteGen &+= 1
+            noteEdits.gen &+= 1
+        }
         for e in events {
             Self.upsert(&items.events, e)
         }

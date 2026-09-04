@@ -74,9 +74,19 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
     /// nothing can reach the server even if a change were enqueued somehow.
     private let readOnly: Bool
 
-    // System-fields cache: id → CKRecord carrying the server change-tag. Materialized
-    // records start from these so saves don't spuriously hit `serverRecordChanged`.
+    /// System-fields cache: id → CKRecord carrying the server change-tag. Materialized
+    /// records start from these so saves don't spuriously hit `serverRecordChanged`.
     private var knownRecords: [String: CKRecord] = [:]
+
+    /// Census accessors (StoreCensus.swift): sync-layer state without exposing the internals.
+    var recordCacheCount: Int {
+        knownRecords.count
+    }
+
+    var pendingSendCount: Int {
+        syncEngine?.state.pendingRecordZoneChanges.count ?? -1
+    }
+
     private let recordCacheURL: URL
 
     init(engine: CalendarEngine, calendarId: String, readOnly: Bool = false) {
@@ -186,8 +196,10 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         let overlayIDs = (snap.rich ?? [:])
             .filter { CalendarEngine.hasImportedPrefix($0.key) && CalendarEngine.hasUserOverlay($0.value) }
             .map(\.key)
+        let noteIDs = (snap.dailyNotes ?? [:]).filter { !$0.value.isEmpty }
+            .map { Self.dnoteRecordName(forKey: $0.key) }
         let ids = snap.events.map(\.id) + snap.bands.map(\.id) + snap.deadlines.map(\.id)
-            + overlayIDs + [CalendarEngine.trackNamesRecordID]
+            + overlayIDs + noteIDs + [CalendarEngine.trackNamesRecordID]
         syncEngine.state.add(pendingRecordZoneChanges: ids.map { .saveRecord(recordID(for: $0)) })
         cloudLog.notice("CloudSync[\(self.zoneID.zoneName, privacy: .public)] full push enqueued: \(ids.count) records")
     }
@@ -389,6 +401,7 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
     ) {
         var events: [TimedEvent] = [], bands: [BandEvent] = [], deadlines: [Deadline] = []
         var rich: [String: RichFields] = [:]
+        var dailyNotes: [String: String] = [:]
         var trackNames: [[String]]? = nil
         // LOCAL WINS: any record with a pending (un-pushed) local change is NEWER here than on the
         // server — applying the fetched copy would revert the user's edit under their cursor (the
@@ -425,6 +438,11 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
                 }
             case "TrackNames": trackNames = decodeTrackNames(r)
             case "Overlay": rich[name] = readRich(r) // imported-event overlay: no body, merges into richById
+            case "DailyNote":
+                if let key = (r["key"] as? String) ?? Self.dnoteKey(fromRecordName: name),
+                   let text = r["text"] as? String {
+                    dailyNotes[key] = text
+                }
             default: break
             }
         }
@@ -436,10 +454,11 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
             knownRecords[id] = nil
         }
         saveRecordCache()
-        if !events.isEmpty || !bands.isEmpty || !deadlines.isEmpty || trackNames != nil || !deletedIDs.isEmpty || !rich
-            .isEmpty {
+        if !events.isEmpty || !bands.isEmpty || !deadlines.isEmpty || trackNames != nil || !deletedIDs.isEmpty
+            || !rich.isEmpty || !dailyNotes.isEmpty {
             engine?.applyRemote(events: events, bands: bands, deadlines: deadlines,
-                                trackNames: trackNames, deletedIDs: deletedIDs, rich: rich)
+                                trackNames: trackNames, deletedIDs: deletedIDs, rich: rich,
+                                dailyNotes: dailyNotes)
         }
     }
 
@@ -497,6 +516,29 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         CKRecord.ID(recordName: name, zoneID: zoneID)
     }
 
+    /// Daily/scope notes sync as their own "DailyNote" records (they had NO record type at
+    /// all — the 2026-09-04 census found 35 notes on the Mac, forever 0 on the phone, taking
+    /// the NOTE tab and every note-sourced todo with them). Record name = "dnote-" + the
+    /// storage key with ":" sanitized ("week:2026-08-16" → "dnote-week_2026-08-16"); the true
+    /// key rides in a field and the sanitization is reversible (keys never contain "_").
+    static let dnotePrefix = "dnote-"
+
+    static func dnoteRecordName(forKey key: String) -> String {
+        dnotePrefix + key.replacingOccurrences(of: ":", with: "_")
+    }
+
+    static func dnoteKey(fromRecordName name: String) -> String? {
+        guard name.hasPrefix(dnotePrefix) else { return nil }
+        let raw = String(name.dropFirst(dnotePrefix.count))
+        if raw.hasPrefix("week_") {
+            return "week:" + raw.dropFirst(5)
+        }
+        if raw.hasPrefix("month_") {
+            return "month:" + raw.dropFirst(6)
+        }
+        return raw
+    }
+
     private func base(_ name: String, _ type: CKRecord.RecordType) -> CKRecord {
         knownRecords[name] ?? CKRecord(recordType: type, recordID: recordID(for: name))
     }
@@ -552,6 +594,15 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         if name == CalendarEngine.trackNamesRecordID {
             let r = base(name, "TrackNames")
             r["json"] = jsonString(snap.monthTrackNames ?? []) as CKRecordValue?
+            return r
+        }
+        if let key = Self.dnoteKey(fromRecordName: name) {
+            // Note gone/emptied since enqueue → nothing to save (the delta emits a DELETE for
+            // clears; a dropped save here is the correct no-op, not a silent loss).
+            guard let text = snap.dailyNotes?[key], !text.isEmpty else { return nil }
+            let r = base(name, "DailyNote")
+            r["key"] = key as NSString
+            r["text"] = text as NSString
             return r
         }
         if let e = snap.events.first(where: { $0.id == name }) {

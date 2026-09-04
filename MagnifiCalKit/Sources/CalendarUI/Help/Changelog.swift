@@ -43,6 +43,16 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.3.2", date: "September 4, 2026",
+            headline: "Notes sync everywhere, self-healing iCloud, and a deadline-drag fix.",
+            changes: [
+                .init(.fixed, "**Daily, weekly, and monthly notes sync via iCloud** — they previously never left the Mac, so the iPhone's NOTE tab and note-sourced to-dos were always empty."),
+                .init(.fixed, "iCloud sync **self-heals** items stuck with a stale server tag instead of silently dropping them, and Settings ▸ Developer gains *Log Store Census* — a category-by-category item count for diffing two devices systematically."),
+                .init(.fixed, "Dragging a deadline by its **label pill** moves the moment line with it again — the line could stay frozen at the old time until something else redrew."),
+                .init(.improved, "**iPhone**: month swipes settle with the system's native paging physics — no more slow crawl at the end of a flick."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.3.1", date: "August 20, 2026",
             headline: "A lighter app, visible sync, and the calendar in your menu bar.",
             changes: [

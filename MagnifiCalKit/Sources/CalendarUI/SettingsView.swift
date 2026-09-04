@@ -913,6 +913,14 @@ private struct DeveloperTab: View {
                     NotificationCenter.default.post(name: .cloudPushEverything, object: nil)
                     pushedAt = Date()
                 }
+                Button("Log Store Census") {
+                    NotificationCenter.default.post(name: .logStoreCensus, object: nil)
+                }
+                Text("Writes a category-by-category item count for every calendar to the unified " +
+                    "log (subsystem dev.magnifical.calendar, category census) — diff it against the " +
+                    "iPhone's census.json to hunt sync gaps systematically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if let at = pushedAt {
                     Text("Enqueued at \(at.formatted(date: .omitted, time: .standard)) — progress in the " +
                         "unified log, subsystem dev.magnifical.calendar, category cloud.")

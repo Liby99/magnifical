@@ -1263,4 +1263,6 @@ public extension Notification.Name {
     /// Settings ▸ Developer ▸ "Push Everything to iCloud" → the engine owner runs
     /// pushEverythingToCloud() (Settings has no engine reference — the house pattern).
     static let cloudPushEverything = Notification.Name("cc.cloud.pushEverything")
+    /// Settings ▸ Developer ▸ "Log Store Census" → engine.logStoreCensus() (same pattern).
+    static let logStoreCensus = Notification.Name("cc.census.log")
 }

@@ -153,6 +153,11 @@ struct CalendarPhoneApp: App {
             if phase == .active {
                 engine.syncNow() // fetch-only under cloudReadOnly
                 PhoneSettingsBridge.apply(engine) // consume + publish Settings ▸ MagnifiCal
+                // Census AFTER the foreground fetch has had time to apply — the systematic
+                // Mac↔phone diff (console category "census" + Files ▸ MagnifiCal/census.json).
+                DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                    engine.logStoreCensus(reason: "foreground+8s")
+                }
             }
         }
     }

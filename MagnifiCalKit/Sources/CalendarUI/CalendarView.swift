@@ -1312,6 +1312,10 @@ private struct ViewPrefObservers: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .cloudPushEverything)) { _ in
                 engine.pushEverythingToCloud()
             }
+            // Settings ▸ Developer: category-by-category store census → unified log.
+            .onReceive(NotificationCenter.default.publisher(for: .logStoreCensus)) { _ in
+                engine.logStoreCensus(reason: "developer-button")
+            }
     }
 
     /// ⌘B / ⌘E / ⌘J — faces of one coin: focus the dashboard's TODO / NOTE / PROJ tab.
