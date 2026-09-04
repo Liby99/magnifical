@@ -214,6 +214,9 @@ extension CalendarEngine {
         // views (the dashboard preview) immediately, without waiting for a render-loop tick.
         caches.noteGen &+= 1
         noteEdits.gen &+= 1
+        if NativeDashDiag.on { // per-keystroke — opt in via CC_DASH_DIAG (links 2-6 always log)
+            cloudLog.notice("dnote[1-edit] key=\(iso, privacy: .public) chars=\(v.count)")
+        }
         schedulePersist()
     }
 

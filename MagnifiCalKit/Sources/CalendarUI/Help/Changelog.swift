@@ -43,6 +43,14 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.3.3", date: "September 4, 2026",
+            headline: "iCloud sync can no longer wedge itself.",
+            changes: [
+                .init(.fixed, "**Sync retry storms are gone** — sends that can never succeed (leftovers from another calendar's zone, stale server tags, server-rejected records) are pruned from the queue instead of retrying forever and blocking every edit behind them."),
+                .init(.fixed, "Sync logging is honest end to end: every send reports what was **saved, deleted, and failed**, and note edits leave numbered breadcrumbs so a stuck note names exactly where it died."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.3.2", date: "September 4, 2026",
             headline: "Notes sync everywhere, self-healing iCloud, and a deadline-drag fix.",
             changes: [

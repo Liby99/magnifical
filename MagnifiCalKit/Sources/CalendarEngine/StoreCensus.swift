@@ -14,6 +14,11 @@ import os
 
 let censusLog = Logger(subsystem: "dev.magnifical.calendar", category: "census")
 
+/// CC_DASH_DIAG=1 — the engine-side twin of NativeDash.diag (verbose per-keystroke traces).
+enum NativeDashDiag {
+    static let on = ProcessInfo.processInfo.environment["CC_DASH_DIAG"] != nil
+}
+
 public extension CalendarEngine {
     /// The census document. The ACTIVE calendar is counted from memory (includes unsaved
     /// edits); the other calendars are decoded from their on-disk stores.

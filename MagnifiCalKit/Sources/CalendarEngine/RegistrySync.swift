@@ -226,6 +226,7 @@ final class RegistrySync: NSObject, CKSyncEngineDelegate {
                     cloudLog
                         .notice("RegistrySync shed stale change tag on \(id.recordName, privacy: .public), re-offering")
                 } else {
+                    syncEngine.state.remove(pendingRecordZoneChanges: [.saveRecord(id)])
                     cloudLog
                         .error(
                             "RegistrySync giving up on \(id.recordName, privacy: .public): unknownItem with no cached tag"

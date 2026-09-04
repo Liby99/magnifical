@@ -120,6 +120,11 @@ extension CalendarEngine {
         guard let onLocalChange else { syncedState = state; return }
         let (up, del) = Self.recordDelta(from: syncedState, to: state)
         syncedState = state
+        let dn = up.filter { $0.hasPrefix(CloudSync.dnotePrefix) }
+            + del.filter { $0.hasPrefix(CloudSync.dnotePrefix) }.map { "-" + $0 }
+        if !dn.isEmpty {
+            cloudLog.notice("dnote[2-delta] \(dn.joined(separator: " "), privacy: .public)")
+        }
         if !up.isEmpty || !del.isEmpty {
             onLocalChange(up, del)
         }
