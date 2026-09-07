@@ -52,6 +52,48 @@
 			<key>AutocorrectionType</key>
 			<string>No</string>
 		</dict>
+		<!-- Apple Calendar import: the master toggle is static (a bool over UserDefaults);
+		     the app's PhoneSettingsBridge consumes it on foreground — connecting selects ALL
+		     of the phone's calendars (static pages can't render a picker) and triggers the
+		     one-time iOS Calendar-access prompt. The two rows below are app-published status. -->
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Apple Calendar</string>
+			<key>FooterText</key>
+			<string>Imports every calendar on this iPhone (iCloud, Google, subscriptions) as read-only events, matching the Mac's import. Toggle, then reopen MagnifiCal to connect.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Import from Apple Calendar</string>
+			<key>Key</key>
+			<string>cc.settings.appleImport</string>
+			<key>DefaultValue</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Access</string>
+			<key>Key</key>
+			<string>cc.settings.appleAccess</string>
+			<key>DefaultValue</key>
+			<string>Not requested yet</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>Calendars</string>
+			<key>Key</key>
+			<string>cc.settings.appleCalendarList</string>
+			<key>DefaultValue</key>
+			<string>—</string>
+		</dict>
 		<!-- Developer -->
 		<dict>
 			<key>Type</key>

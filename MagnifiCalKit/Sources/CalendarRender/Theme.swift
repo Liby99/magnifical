@@ -66,6 +66,10 @@ public struct Theme {
     public let textMuted: Color
     public let accentDark: Color
     public let accentGrey: Color
+    /// A SOLID near-background tint of the accent (quick-add "+" hover fill): the accent blended
+    /// almost entirely into the light/dark content background. Opaque on purpose — a highlight
+    /// that never lets the grid beneath show through (unlike an accent .opacity() wash).
+    public let accentWash: Color
     public let sep: Color
     public let gridLine: Color
     public let cellGrid: Color
@@ -98,6 +102,12 @@ public struct Theme {
             let label = sys(.labelColor) // white in dark, near-black in light
             bg = sys(.textBackgroundColor) // content background (near-black / white)
             textMuted = sys(.secondaryLabelColor)
+            var bgRGB = (r: dark ? 0.12 : 1.0, g: dark ? 0.12 : 1.0, b: dark ? 0.12 : 1.0)
+            appearance.performAsCurrentDrawingAppearance {
+                if let c = NSColor.textBackgroundColor.usingColorSpace(.sRGB) {
+                    bgRGB = (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+                }
+            }
         #else
             let trait = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
             func sys(_ ui: UIColor) -> Color {
@@ -108,7 +118,17 @@ public struct Theme {
             let label = sys(.label) // white in dark, near-black in light
             bg = sys(.systemBackground) // content background (near-black / white)
             textMuted = sys(.secondaryLabel)
+            var br: CGFloat = 0, bgr: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+            UIColor.systemBackground.resolvedColor(with: trait).getRed(&br, green: &bgr, blue: &bb, alpha: &ba)
+            let bgRGB = (r: Double(br), g: Double(bgr), b: Double(bb))
         #endif
+        // Accent share of the wash: dark mode needs more accent to read against near-black.
+        let ah = AccentPref.hex
+        let share = dark ? 0.22 : 0.12
+        accentWash = Color(.sRGB,
+                           red: bgRGB.r * (1 - share) + Double((ah >> 16) & 0xFF) / 255 * share,
+                           green: bgRGB.g * (1 - share) + Double((ah >> 8) & 0xFF) / 255 * share,
+                           blue: bgRGB.b * (1 - share) + Double(ah & 0xFF) / 255 * share)
         // Text: keep the bright system label in dark mode; in light mode the system label is
         // effectively pure black, which reads harsh — soften to a modest dark gray. Structural
         // lines/borders below still derive from `label`, so only the text itself changes.

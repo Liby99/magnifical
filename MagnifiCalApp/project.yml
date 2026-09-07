@@ -96,6 +96,9 @@ targets:
         UIBackgroundModes: [remote-notification]   # CKSyncEngine push delivery
         UIFileSharingEnabled: true                 # Files app: bench results out, payloads in
         LSSupportsOpeningDocumentsInPlace: true
+        # Apple Calendar import (Settings ▸ MagnifiCal): TCC requires the usage string to prompt.
+        NSCalendarsFullAccessUsageDescription: MagnifiCal reads your calendars so it can show their events alongside your MagnifiCal calendar.
+        NSCalendarsUsageDescription: MagnifiCal reads your calendars so it can show their events alongside your MagnifiCal calendar.
     dependencies:
       - package: MagnifiCalKit
         product: CalendarEngine

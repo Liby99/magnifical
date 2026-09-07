@@ -18,15 +18,16 @@ struct DeadlineAddButton: View {
     let theme: Theme
     var hovering: Bool = false
     var body: some View {
-        // Neutral cursor-colored ring at rest; on hover the edge + glyph brighten to full label color,
-        // with a faint fill and glow (mirrors the web's .cc-ddl-add:hover feedback).
+        // Neutral cursor-colored ring at rest; on hover the whole affordance takes the ACCENT:
+        // accent ring + plus over theme.accentWash — a SOLID near-background accent tint, so it
+        // reads as a lit-up highlight rather than a darkened edge.
         Image(systemName: "plus")
             .font(.system(size: 8, weight: hovering ? .heavy : .bold))
-            .foregroundStyle(hovering ? theme.text : theme.text.opacity(0.75))
+            .foregroundStyle(hovering ? Theme.accent : theme.text.opacity(0.75))
             .frame(width: 15, height: 15)
-            .background(Circle().fill(hovering ? theme.text.opacity(0.14) : theme.bg))
-            .overlay(Circle().strokeBorder(hovering ? theme.text : theme.cursor, lineWidth: hovering ? 2 : 1.5))
-            .shadow(color: theme.text.opacity(hovering ? 0.35 : 0), radius: hovering ? 4 : 0)
+            .background(Circle().fill(hovering ? theme.accentWash : theme.bg))
+            .overlay(Circle().strokeBorder(hovering ? Theme.accent : theme.cursor, lineWidth: hovering ? 2 : 1.5))
+            .shadow(color: Theme.accent.opacity(hovering ? 0.35 : 0), radius: hovering ? 4 : 0)
             .shadow(color: .black.opacity(0.3), radius: 2.5)
             .animation(.easeOut(duration: 0.12), value: hovering)
     }

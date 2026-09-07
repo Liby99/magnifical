@@ -34,6 +34,20 @@ extension CalendarEngine {
         appleImporter.calendars()
     }
 
+    /// One-call connect for the iPhone's Settings ▸ MagnifiCal toggle: prompt for Calendar
+    /// access (if needed), select EVERY calendar on the device, enable for the ACTIVE
+    /// MagnifiCal calendar, and run the first import. All-calendars because the system
+    /// Settings page is a static plist and cannot render a picker (see PhoneSettingsBridge);
+    /// EventKit calendar ids are device-local, so the Mac's selection can't be reused.
+    /// Returns false when access is denied — the bridge reflects that back into Settings.
+    public func connectAppleCalendarAllCalendars() async -> Bool {
+        guard await appleImporter.requestAccess() else { return false }
+        appleCalendarIds = appleCalendars().map(\.id)
+        appleSyncEnabled = true
+        importAppleCalendar()
+        return true
+    }
+
     /// Re-fetch the enabled Apple calendars for the visible year ±1 and merge them in as read-only
     /// events (full-window re-fetch; Apple has no incremental cursor). Disabled/unauthorized → clears
     /// any previously-imported set. Cheap to call on launch, foreground, and settings change.

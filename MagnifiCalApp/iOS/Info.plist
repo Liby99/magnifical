@@ -22,6 +22,10 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MagnifiCal reads your calendars so it can show their events alongside your MagnifiCal calendar.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MagnifiCal reads your calendars so it can show their events alongside your MagnifiCal calendar.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

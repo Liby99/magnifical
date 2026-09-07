@@ -180,6 +180,26 @@ enum PhoneSettingsBridge {
                 engine.switchCalendar(to: match.id)
             }
         }
+        // Apple Calendar import (Settings ▸ MagnifiCal ▸ "Import from Apple Calendar").
+        // The static page owns only the master toggle; connect selects ALL of the phone's
+        // calendars (a static plist can't render a picker) and iOS shows the access prompt.
+        let wantApple = d.bool(forKey: "cc.settings.appleImport")
+        if wantApple, !engine.appleSyncEnabled {
+            Task { @MainActor in
+                let ok = await engine.connectAppleCalendarAllCalendars()
+                if !ok {
+                    d.set(false, forKey: "cc.settings.appleImport") // denied → reflect back
+                }
+                publishAppleRows(engine, d)
+            }
+        } else if !wantApple, engine.appleSyncEnabled {
+            engine.appleSyncEnabled = false
+            engine.importAppleCalendar() // disabled → clears the imported layer
+        } else if engine.appleSyncEnabled {
+            engine.importAppleCalendar() // enabled → refresh on every foreground (cheap)
+        }
+        publishAppleRows(engine, d)
+
         // Publish the live state the static page displays.
         d.set(engine.activeCalendar?.name ?? "Main", forKey: "cc.settings.activeCalendarName")
         d.set(engine.allCalendars.map(\.name).joined(separator: ", "),
@@ -187,5 +207,19 @@ enum PhoneSettingsBridge {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
         d.set("\(v) (\(b))", forKey: "cc.settings.version")
+    }
+
+    /// The Apple-import status rows the static Settings page displays.
+    @MainActor private static func publishAppleRows(_ engine: CalendarEngine, _ d: UserDefaults) {
+        let access = switch CalendarEngine.appleAccess {
+        case .authorized: "Granted"
+        case .denied: "Denied — enable in Settings ▸ Privacy ▸ Calendars"
+        case .notDetermined: "Not requested yet"
+        }
+        d.set(access, forKey: "cc.settings.appleAccess")
+        let cals = engine.appleSyncEnabled
+            ? engine.appleCalendars().map(\.title).joined(separator: ", ")
+            : "—"
+        d.set(cals.isEmpty ? "—" : cals, forKey: "cc.settings.appleCalendarList")
     }
 }
