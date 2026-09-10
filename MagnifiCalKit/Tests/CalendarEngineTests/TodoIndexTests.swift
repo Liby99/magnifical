@@ -324,4 +324,29 @@ final class TodoIndexTests: XCTestCase {
         XCTAssertEqual(t.tags, ["real"])
         XCTAssertEqual(t.links, [TodoLink(label: "the paper", url: "https://example.com/p#frag")])
     }
+
+    func testStampCreatedStampsOnlyUnstampedTopLevelTasks() throws {
+        let now = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026, month: 9, day: 7, hour: 14, minute: 30
+        )))
+        let note = """
+        # Plan
+        - [ ] new todo
+        - [x] already stamped created:2026-09-01T10:00
+          - [ ] sub-task stays untouched
+        plain prose line
+        - [ ] trailing spaces trimmed\u{20}\u{20}
+        """
+        let out = TodoIndex.stampCreated(note, now: now)
+        let rows = out.components(separatedBy: "\n")
+        XCTAssertEqual(rows[1], "- [ ] new todo created:2026-09-07T14:30")
+        XCTAssertEqual(rows[2], "- [x] already stamped created:2026-09-01T10:00")
+        XCTAssertEqual(rows[3], "  - [ ] sub-task stays untouched")
+        XCTAssertEqual(rows[4], "plain prose line")
+        XCTAssertEqual(rows[5], "- [ ] trailing spaces trimmed created:2026-09-07T14:30")
+        // Idempotent: a second pass changes nothing.
+        XCTAssertEqual(TodoIndex.stampCreated(out, now: now), out)
+        // No tasks → the text comes back byte-identical.
+        XCTAssertEqual(TodoIndex.stampCreated("just prose\n", now: now), "just prose\n")
+    }
 }

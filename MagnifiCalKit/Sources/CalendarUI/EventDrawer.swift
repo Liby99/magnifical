@@ -6,6 +6,7 @@
 import AppKit
 import CalendarEngine
 import CalendarGeometry
+import CalendarRender
 import SwiftUI
 
 @MainActor
@@ -30,6 +31,10 @@ public final class CalendarUIState {
     }
 
     public var pendingTodoDelete: PendingTodoDelete?
+    /// TODO/PROJ row right-click callout awaiting presentation — published UP from the panel and
+    /// presented by EventMenuOverlay from stable root content (never from inside the carousel;
+    /// a carousel-hosted popover re-anchored every render tick → AttributeGraph live-lock).
+    public var todoMenu: TodoRowMenuRequest?
     public var editingTrack: TrackEdit? // inline track-name editor target
     public var editingBand: BandEdit? // inline band-title editor target
     public var editingTimed: TimedEdit? // inline timed-event-title editor target

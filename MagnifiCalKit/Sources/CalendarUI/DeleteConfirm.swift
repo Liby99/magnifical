@@ -337,6 +337,8 @@ struct ModalOverlays: ViewModifier {
     var onCut: () -> Void = {}
     var onPaste: () -> Void = {}
     var readClip: () -> CalendarEngine.ClipPayload? = { nil }
+    /// Window coords → the callout anchor space (CalendarView supplies the catcher conversion).
+    var todoAnchor: (CGPoint) -> CGRect = { CGRect(x: $0.x - 2, y: $0.y - 2, width: 4, height: 4) }
 
     /// The canvas input gate reflects EVERY blocking dialog this modifier hosts.
     private func syncModalGate() {
@@ -449,9 +451,17 @@ struct ModalOverlays: ViewModifier {
                 }
             }
             // Right-click event callout (kept in this bundle for the type-checker's budget).
-            .modifier(EventMenuOverlay(ui: ui, engine: engine, theme: theme,
-                                       onRename: onRename, onCopy: onCopy, onCut: onCut,
-                                       onPaste: onPaste, readClip: readClip))
+            .modifier(eventMenuOverlay())
+    }
+
+    /// Assignment-style construction (the type-checker budget rule: never grow a many-argument
+    /// call inside a body chain).
+    private func eventMenuOverlay() -> EventMenuOverlay {
+        var m = EventMenuOverlay(ui: ui, engine: engine, theme: theme,
+                                 onRename: onRename, onCopy: onCopy, onCut: onCut,
+                                 onPaste: onPaste, readClip: readClip)
+        m.todoAnchor = todoAnchor
+        return m
     }
 }
 

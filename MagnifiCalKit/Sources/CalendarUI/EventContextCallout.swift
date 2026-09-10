@@ -8,6 +8,7 @@
 import AppKit
 import CalendarEngine
 import CalendarGeometry
+import CalendarRender
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -40,6 +41,8 @@ struct EventMenuOverlay: ViewModifier {
     var onCut: () -> Void = {}
     var onPaste: () -> Void = {}
     var readClip: () -> CalendarEngine.ClipPayload? = { nil }
+    /// Window coords → this content's anchor space (CalendarView supplies the catcher conversion).
+    var todoAnchor: (CGPoint) -> CGRect = { CGRect(x: $0.x - 2, y: $0.y - 2, width: 4, height: 4) }
 
     private var shown: Binding<Bool> {
         Binding<Bool>(get: { ui.eventMenu != nil }, set: {
@@ -53,6 +56,15 @@ struct EventMenuOverlay: ViewModifier {
         Binding<Bool>(get: { ui.spaceMenu != nil }, set: {
             (v: Bool) in if !v {
                 ui.spaceMenu = nil
+            }
+        })
+    }
+
+    private var todoShown: Binding<Bool> {
+        Binding<Bool>(get: { ui.todoMenu != nil }, set: {
+            (v: Bool) in if !v {
+                ui.todoMenu?.onDismiss()
+                ui.todoMenu = nil
             }
         })
     }
@@ -133,6 +145,19 @@ struct EventMenuOverlay: ViewModifier {
                     onPaste: { onPaste() },
                     onClose: { ui.spaceMenu = nil }
                 )
+            }
+        }
+        // TODO/PROJ row callout, published up from the panel (TodoRowMenuRequest): presented
+        // HERE — from stable root content, like the two above — because presenting it from
+        // inside the per-frame dashboard carousel re-anchored the NSPopover on every render
+        // tick (AttributeGraph cycle: seconds-slow menu, live-lock under Delete's blur).
+        .popover(isPresented: todoShown,
+                 attachmentAnchor: .rect(.rect(ui.todoMenu.map { todoAnchor($0.windowPoint) } ?? .zero)),
+                 arrowEdge: .trailing) {
+            if let m = ui.todoMenu {
+                TodoRowCallout(todo: m.todo, done: m.done, pinTag: m.pinTag, theme: theme,
+                               actions: m.actions, onColorPreview: m.onColorPreview,
+                               onClose: { m.onDismiss(); ui.todoMenu = nil })
             }
         }
     }

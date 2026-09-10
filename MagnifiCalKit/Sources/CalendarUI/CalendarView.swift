@@ -101,13 +101,23 @@ public struct CalendarView: View {
     /// the type checker, and adding closure arguments to a call inside it is what pushed solves
     /// into the minutes (bisected 2026-07-18). Constructed here, the closures never enter it.
     private func modalOverlays(theme: Theme) -> ModalOverlays {
-        ModalOverlays(ui: ui, engine: engine, theme: theme,
-                      onDelete: { performDelete($0) },
-                      onRename: { renameInline($0) },
-                      onCopy: { (catcherHandle.catcher as? CatcherView)?.copySelection() },
-                      onCut: { (catcherHandle.catcher as? CatcherView)?.cutSelection() },
-                      onPaste: { (catcherHandle.catcher as? CatcherView)?.performPaste() },
-                      readClip: { (catcherHandle.catcher as? CatcherView)?.readClip() })
+        var m = ModalOverlays(ui: ui, engine: engine, theme: theme,
+                              onDelete: { performDelete($0) },
+                              onRename: { renameInline($0) },
+                              onCopy: { (catcherHandle.catcher as? CatcherView)?.copySelection() },
+                              onCut: { (catcherHandle.catcher as? CatcherView)?.cutSelection() },
+                              onPaste: { (catcherHandle.catcher as? CatcherView)?.performPaste() },
+                              readClip: { (catcherHandle.catcher as? CatcherView)?.readClip() })
+        // Row-callout anchor: window coords (from the panel's NSEvent) → the catcher's space,
+        // the same space the event/space callout anchors already use.
+        m.todoAnchor = { wp in
+            guard let c = catcherHandle.catcher else {
+                return CGRect(x: wp.x - 2, y: wp.y - 2, width: 4, height: 4)
+            }
+            let p = c.convert(wp, from: nil)
+            return CGRect(x: p.x - 2, y: p.y - 2, width: 4, height: 4)
+        }
+        return m
     }
 
     /// The AppKit input bridge, built OUTSIDE the body chain and assignment-style: the chain is
@@ -765,6 +775,7 @@ public struct CalendarView: View {
                                         ui.pendingTodoDelete = CalendarUIState
                                             .PendingTodoDelete(text: text, confirm: confirm)
                                     },
+                                    onRowMenu: { ui.todoMenu = $0 },
                                     warmAllTabs: NativeDash.warmIds.contains(panel.panelId),
                                     trimToActiveTab: !isLive
                                         && !NativeDash.warmIds.contains(panel.panelId))

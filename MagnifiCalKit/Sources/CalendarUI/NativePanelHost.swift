@@ -24,6 +24,9 @@ struct NativePanelHost: View, Equatable {
     var onJump: (String, Int?) -> Void = { _, _ in }
     /// TODO/PROJ row-menu Delete → the window-level confirm dialog (CalendarView hosts it).
     var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    /// TODO/PROJ row right-click → the window-level callout popover (CalendarView presents it
+    /// from stable content; presenting inside the carousel live-locked — see NativeDashPanel).
+    var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }
 
     /// The per-frame TimelineView re-creates this view every frame; the closures make SwiftUI
     /// assume it changed, so WITHOUT this the whole panel body (sections, dictionaries, gantt
@@ -58,13 +61,14 @@ struct NativePanelHost: View, Equatable {
             if tab == .todo || mountedTabs.contains(.todo) {
                 NativeDashPanel(engine: engine, scope: scope, key: key, theme: theme,
                                 settings: settings, nav: nav, onOpen: onOpen, onJump: onJump,
-                                onDeleteRequest: onDeleteRequest)
+                                onDeleteRequest: onDeleteRequest, onRowMenu: onRowMenu)
                     .opacity(tab == .todo ? 1 : 0)
                     .allowsHitTesting(tab == .todo)
             }
             if tab == .proj || mountedTabs.contains(.proj) {
                 NativeProjPanel(engine: engine, scope: scope, key: key, theme: theme,
-                                onOpen: onOpen, onJump: onJump, onDeleteRequest: onDeleteRequest)
+                                onOpen: onOpen, onJump: onJump, onDeleteRequest: onDeleteRequest,
+                                onRowMenu: onRowMenu)
                     .opacity(tab == .proj ? 1 : 0)
                     .allowsHitTesting(tab == .proj)
             }

@@ -160,6 +160,11 @@ public struct NativeDashPanel: View {
     /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
     /// — the confirm's blur must cover the WHOLE window, not just this panel.
     var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    /// Row right-click → publish the callout request UP to the window root, which presents the
+    /// popover from stable content. Never present it from this panel: the carousel's per-frame
+    /// .position/.offset re-anchored the NSPopover every tick (AttributeGraph cycle — slow menu,
+    /// and a live-lock when Delete's full-window blur hit the dismissing popover's ancestors).
+    var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }
 
     /// Deadline-row reveal override (the iPhone drawer dismisses itself before flying the
     /// canvas; nil — the Mac — keeps the direct engine.revealAndSelect).
@@ -172,6 +177,7 @@ public struct NativeDashPanel: View {
                 onOpen: @escaping (String, Int?, String?) -> Void,
                 onJump: @escaping (String, Int?) -> Void = { _, _ in },
                 onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in },
+                onRowMenu: @escaping (TodoRowMenuRequest) -> Void = { _ in },
                 onReveal: ((String) -> Void)? = nil) {
         self.engine = engine
         self.scope = scope
@@ -182,19 +188,13 @@ public struct NativeDashPanel: View {
         self.onOpen = onOpen
         self.onJump = onJump
         self.onDeleteRequest = onDeleteRequest
+        self.onRowMenu = onRowMenu
         self.onReveal = onReveal
     }
 
     @State private var doneOpen: Set<String> = [] // per-view completed expansion (session-scoped)
     private static let doneShow = 10
 
-    /// The right-click callout's row + anchor rect (both in the panel-root space).
-    private struct RowMenu {
-        var todo: ParsedTodo
-        var rect: CGRect
-    }
-
-    @State private var rowMenu: RowMenu?
     @State private var rowFrames = TodoRowFrameStore() // rows report their frames here
 
     /// The panel root's named coordinate space — row frames and the right-click layer's local
@@ -282,37 +282,16 @@ public struct NativeDashPanel: View {
             // from the frames the rows themselves report into rowFrames, and consumes the event.
             // Non-row right-clicks fall through to the .contextMenu below. iOS compiles this
             // out — the row menu is a pointer affordance (the phone client is read-only).
-            .background(DashRightClickLayer(frames: rowFrames, onHit: { todo, rect in
-                rowMenu = RowMenu(todo: todo, rect: rect)
+            .background(DashRightClickLayer(frames: rowFrames, onHit: { todo, windowPoint in
+                // Re-resolve through `live` so the callout reflects the current parse of the line.
+                let t = live[Self.anchor(todo)] ?? todo
+                onRowMenu(TodoRowMenuRequest(todo: t, done: t.done, pinTag: "pinned",
+                                             windowPoint: windowPoint, actions: rowMenuActions()))
             }))
-            .popover(isPresented: rowMenuShown,
-                     attachmentAnchor: .rect(.rect(rowMenu?.rect ?? .zero)),
-                     arrowEdge: .trailing) {
-                if let m = rowMenu {
-                    rowCallout(m, live: live)
-                }
-            }
         #endif
             // Right-click anywhere OUTSIDE a row = the cog's layering menu (single-sourced from
             // DashTodoCatalog, writing through DashTodoSettings — same as the webview's popup).
             .contextMenu { prefsMenu }
-    }
-
-    private var rowMenuShown: Binding<Bool> {
-        Binding(get: { rowMenu != nil }, set: { v in
-            if !v {
-                rowMenu = nil
-            }
-        })
-    }
-
-    /// The row's right-click callout — the SHARED TodoRowCallout (PROJ's exact menu) with this
-    /// panel's pin tag (#pinned) and write paths. The todo re-resolves through `live` so the
-    /// menu reflects the current parse of its line.
-    private func rowCallout(_ m: RowMenu, live: [String: ParsedTodo]) -> some View {
-        let t = live[Self.anchor(m.todo)] ?? m.todo
-        return TodoRowCallout(todo: t, done: t.done, pinTag: "pinned", theme: theme,
-                              actions: rowMenuActions(), onClose: { rowMenu = nil })
     }
 
     // ── Row-menu writes (the right-click callout's actions) ──────────────────────────────────
@@ -787,7 +766,7 @@ private struct RowFrameReporter: View {
     /// other clicks pass through (the panel's .contextMenu keeps the layering menu).
     private struct DashRightClickLayer: NSViewRepresentable {
         let frames: TodoRowFrameStore
-        var onHit: (ParsedTodo, CGRect) -> Void
+        var onHit: (ParsedTodo, CGPoint) -> Void // (row's todo, click in WINDOW coords)
 
         func makeNSView(context _: Context) -> Layer {
             let v = Layer()
@@ -806,7 +785,7 @@ private struct RowFrameReporter: View {
 
         final class Layer: NSView {
             var frames: TodoRowFrameStore?
-            var onHit: ((ParsedTodo, CGRect) -> Void)?
+            var onHit: ((ParsedTodo, CGPoint) -> Void)?
 
             override var isFlipped: Bool {
                 true
@@ -846,7 +825,7 @@ private struct RowFrameReporter: View {
                         guard let self, e.window === self.window, self.effectivelyVisible else { return e }
                         let p = self.convert(e.locationInWindow, from: nil)
                         guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
-                        self.onHit?(todo, CGRect(x: p.x, y: p.y, width: 1, height: 1))
+                        self.onHit?(todo, e.locationInWindow)
                         return nil // consumed — no pass-through context menus underneath
                     }
                 }

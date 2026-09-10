@@ -25,13 +25,17 @@ public struct NativeProjPanel: View {
     /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
     /// — the confirm's blur must cover the WHOLE window, not just this panel.
     var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    /// Row right-click → publish the callout request UP to the window root (see
+    /// NativeDashPanel.onRowMenu — presenting the popover from inside the carousel live-locked).
+    var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }
 
     /// Explicit init mirroring the old memberwise defaults (public — the module boundary
     /// dropped the free memberwise init when the panel moved to CalendarRender).
     public init(engine: CalendarEngine, scope: String, key: String, theme: Theme,
                 onOpen: @escaping (String, Int?, String?) -> Void,
                 onJump: @escaping (String, Int?) -> Void = { _, _ in },
-                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in }) {
+                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in },
+                onRowMenu: @escaping (TodoRowMenuRequest) -> Void = { _ in }) {
         self.engine = engine
         self.scope = scope
         self.key = key
@@ -39,6 +43,7 @@ public struct NativeProjPanel: View {
         self.onOpen = onOpen
         self.onJump = onJump
         self.onDeleteRequest = onDeleteRequest
+        self.onRowMenu = onRowMenu
     }
 
     @State private var expanded: String? // accordion: at most one project shows ALL rows
@@ -244,7 +249,8 @@ public struct NativeProjPanel: View {
                       },
                       onQuickAdd: { quickAdd(p.key, $0) },
                       onQuickAddHover: { quickAddHovering = $0 },
-                      menuActions: rowMenuActions())
+                      menuActions: rowMenuActions(),
+                      onRowMenu: onRowMenu)
         }
     }
 
@@ -283,19 +289,15 @@ private struct ProjChart: View {
     var onQuickAdd: (String) -> Void
     var onQuickAddHover: (Bool) -> Void = { _ in } // reports up: the panel's click-away guard
     var menuActions: TodoRowMenuActions = .init()
+    var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }
 
     @State private var frontLabel: String? // hovered deadline/event label: raised above the rest
     @State private var draft = "" // the quick-add field's in-progress text
     @State private var quickAddHover = false // one hover state for the whole row, "+" included
     @State private var hoveredRow: String? // the ONE hovered gantt row (rowId); others' bars dim
     @State private var menuPreview: String? // palette hover in the row callout → live bar tint
-    @State private var rowMenu: RowMenu? // the right-click callout's row + anchor rect
+    @State private var menuRow: String? // rowId whose callout is open (scopes the preview tint)
     @FocusState private var draftFocused: Bool
-
-    private struct RowMenu {
-        var task: ProjTask
-        var anchor: CGRect // in chart space (the popover's attachment rect)
-    }
 
     private var headroom: CGFloat {
         // 1-row case: 24 (was 18) so the quick-add row keeps breathing room under the project
@@ -326,11 +328,17 @@ private struct ProjChart: View {
                                     onHover: { idx in
                                         hoveredRow = idx.map { tasks[$0].rowId }
                                     },
-                                    onRightClick: { idx, p in
+                                    onRightClick: { idx, windowPoint in
                                         guard idx < tasks.count else { return }
-                                        rowMenu = RowMenu(task: tasks[idx],
-                                                          anchor: CGRect(x: p.x, y: p.y,
-                                                                         width: 1, height: 1))
+                                        let t = tasks[idx]
+                                        menuRow = t.rowId
+                                        onRowMenu(TodoRowMenuRequest(
+                                            todo: t.todo, done: t.end != nil,
+                                            pinTag: "proj-pinned", windowPoint: windowPoint,
+                                            actions: menuActions,
+                                            onColorPreview: { menuPreview = $0 },
+                                            onDismiss: { menuPreview = nil; menuRow = nil }
+                                        ))
                                     })
                 #endif
                 HStack(alignment: .top, spacing: 10) {
@@ -357,27 +365,8 @@ private struct ProjChart: View {
                 rowStrips(fullW: geo.size.width)
                     .allowsHitTesting(false)
             }
-            .popover(isPresented: menuShown,
-                     attachmentAnchor: .rect(.rect(rowMenu?.anchor ?? .zero)),
-                     arrowEdge: .trailing) {
-                if let m = rowMenu {
-                    TodoRowCallout(todo: m.task.todo, done: m.task.end != nil,
-                                   pinTag: "proj-pinned", theme: theme, actions: menuActions,
-                                   onColorPreview: { menuPreview = $0 },
-                                   onClose: { rowMenu = nil; menuPreview = nil })
-                }
-            }
         }
         .frame(height: chartHeight)
-    }
-
-    private var menuShown: Binding<Bool> {
-        Binding(get: { rowMenu != nil }, set: { v in
-            if !v {
-                rowMenu = nil
-                menuPreview = nil // a closed menu leaves no preview tint behind
-            }
-        })
     }
 
     /// The full-width row layer: per row, ONE strip aligned to y = headroom + index·rowH that
@@ -582,7 +571,7 @@ private struct ProjChart: View {
         // DARK: the border palette is deliberately PASTEL (tuned for 1-2px strokes on a dark
         // ground) — as an area fill it has no saturation to give. Fills take the saturated
         // hue (eventColor); light mode keeps the border hue it was tuned on.
-        let key = (rowMenu?.task.rowId == t.rowId ? menuPreview : nil) ?? t.color
+        let key = (menuRow == t.rowId ? menuPreview : nil) ?? t.color
         let color = theme.dark ? theme.eventColor(key) : theme.eventBorder(key)
         let end = t.end ?? today
         // Row hover: every OTHER row's bar segments (and due ticks) fade back; the hovered
@@ -752,7 +741,7 @@ private struct ProjChart: View {
         var rowH: CGFloat
         var rowCount: Int
         var onHover: (Int?) -> Void
-        var onRightClick: (Int, CGPoint) -> Void
+        var onRightClick: (Int, CGPoint) -> Void // (row index, click in WINDOW coords)
 
         func makeNSView(context _: Context) -> Layer {
             let v = Layer()
@@ -860,7 +849,7 @@ private struct ProjChart: View {
                         else { return e }
                         let p = self.convert(e.locationInWindow, from: nil)
                         guard self.bounds.contains(p), let r = self.row(at: p) else { return e }
-                        self.onRightClick?(r, p)
+                        self.onRightClick?(r, e.locationInWindow)
                         return nil // consumed — no pass-through context menus underneath
                     }
                 }

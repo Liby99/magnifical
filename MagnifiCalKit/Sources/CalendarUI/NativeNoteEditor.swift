@@ -623,28 +623,15 @@ struct NativeNoteEditor: NSViewRepresentable {
 
         /// The CodeMirror editor's stampCreated(), ported: append " created:YYYY-MM-DDTHH:mm"
         /// to top-level task lines that lack one — only when the session actually edited the
-        /// note. Runs the rewrite through the same onText path as typing, so persistence,
-        /// gen bumps, and the native panels all see it like any other edit.
+        /// note. The transformation itself is TodoIndex.stampCreated (shared with the AI
+        /// assistant's note-writing tools); this wrapper runs the rewrite through the same
+        /// onText path as typing, so persistence, gen bumps, and the native panels all see it
+        /// like any other edit.
         func stampCreatedIfDirty() {
             guard sessionDirty, let tv = textView else { return }
             sessionDirty = false // clear FIRST: the rewrite below re-fires textDidChange
             let body = tv.string
-            let lines = TodoIndex.linesNeedingCreated(body)
-            guard !lines.isEmpty else { return }
-            let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute],
-                                                    from: Date())
-            let stamp = String(format: " created:%04d-%02d-%02dT%02d:%02d",
-                               c.year ?? 2000, c.month ?? 1, c.day ?? 1,
-                               c.hour ?? 0, c.minute ?? 0)
-            var rows = body.components(separatedBy: "\n")
-            for n in lines where n >= 1 && n <= rows.count { // 1-based line numbers
-                var line = rows[n - 1]
-                while line.hasSuffix(" ") || line.hasSuffix("\t") {
-                    line.removeLast()
-                }
-                rows[n - 1] = line + stamp
-            }
-            let next = rows.joined(separator: "\n")
+            let next = TodoIndex.stampCreated(body)
             guard next != body else { return }
             let sel = tv.selectedRange()
             tv.string = next

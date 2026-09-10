@@ -167,8 +167,12 @@ public enum TodoIndex {
     public static func tagToken(_ tag: String) -> String? {
         var s = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         s = s.replacingOccurrences(of: "[^A-Za-z0-9_-]+", with: "-", options: .regularExpression)
-        while s.hasPrefix("-") { s.removeFirst() }
-        while s.hasSuffix("-") { s.removeLast() }
+        while s.hasPrefix("-") {
+            s.removeFirst()
+        }
+        while s.hasSuffix("-") {
+            s.removeLast()
+        }
         return s.isEmpty ? nil : s
     }
 
@@ -631,6 +635,28 @@ public enum TodoIndex {
             }
         }
         return out
+    }
+
+    /// The editor's session-end post-processing pass as a pure function: append
+    /// " created:YYYY-MM-DDTHH:mm" to every top-level task line that lacks one (trailing
+    /// whitespace trimmed first). Idempotent. The native editor runs this when an edit session
+    /// ends; every OTHER writer of note text (the AI assistant's note/event tools) must run it
+    /// too, or its todos land without a creation date.
+    public static func stampCreated(_ noteText: String, now: Date = Date()) -> String {
+        let lines = linesNeedingCreated(noteText)
+        guard !lines.isEmpty else { return noteText }
+        let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: now)
+        let stamp = String(format: " created:%04d-%02d-%02dT%02d:%02d",
+                           c.year ?? 2000, c.month ?? 1, c.day ?? 1, c.hour ?? 0, c.minute ?? 0)
+        var rows = noteText.components(separatedBy: "\n")
+        for n in lines where n >= 1 && n <= rows.count { // 1-based line numbers
+            var line = rows[n - 1]
+            while line.hasSuffix(" ") || line.hasSuffix("\t") {
+                line.removeLast()
+            }
+            rows[n - 1] = line + stamp
+        }
+        return rows.joined(separator: "\n")
     }
 }
 

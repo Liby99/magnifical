@@ -17,19 +17,49 @@ import SwiftUI
 /// act on the ParsedTodo source line, so both panels share one shape: Check/Uncheck routes
 /// through the panel's own toggle path (`toggle`), Go to Definition through its open path
 /// (`openTodo`), and Delete through the window-level confirm chain.
-struct TodoRowMenuActions {
-    var toggle: (ParsedTodo) -> Void = { _ in }
-    var openTodo: (ParsedTodo) -> Void = { _ in }
-    var setColor: (ParsedTodo, String) -> Void = { _, _ in }
-    var pin: (ParsedTodo) -> Void = { _ in }
-    var unpin: (ParsedTodo) -> Void = { _ in }
-    var setPriority: (ParsedTodo, Int) -> Void = { _, _ in }
-    var clearPriority: (ParsedTodo) -> Void = { _ in }
-    var hide: (ParsedTodo) -> Void = { _ in }
-    var delete: (ParsedTodo) -> Void = { _ in }
+public struct TodoRowMenuActions {
+    public var toggle: (ParsedTodo) -> Void = { _ in }
+    public var openTodo: (ParsedTodo) -> Void = { _ in }
+    public var setColor: (ParsedTodo, String) -> Void = { _, _ in }
+    public var pin: (ParsedTodo) -> Void = { _ in }
+    public var unpin: (ParsedTodo) -> Void = { _ in }
+    public var setPriority: (ParsedTodo, Int) -> Void = { _, _ in }
+    public var clearPriority: (ParsedTodo) -> Void = { _ in }
+    public var hide: (ParsedTodo) -> Void = { _ in }
+    public var delete: (ParsedTodo) -> Void = { _ in }
+
+    public init() {}
 }
 
-struct TodoRowCallout: View {
+/// A row-callout request published from a panel UP to the window root, which presents the
+/// popover from STABLE content (the event callout's pattern). The popover must never be
+/// presented from inside the per-frame dashboard carousel: the ticking .position/.offset
+/// modifiers re-anchored the NSPopover on every render tick — an AttributeGraph cycle that
+/// made the menu take seconds to form, and live-locked the whole app when Delete's
+/// full-window blur landed while the popover was still dismissing from the blurred subtree.
+public struct TodoRowMenuRequest {
+    public let todo: ParsedTodo
+    public let done: Bool
+    public let pinTag: String // "pinned" (TODO panel) | "proj-pinned" (PROJ)
+    public let windowPoint: CGPoint // NSEvent.locationInWindow — the root converts to its anchor space
+    public let actions: TodoRowMenuActions
+    public let onColorPreview: (String?) -> Void
+    public let onDismiss: () -> Void // panel-side cleanup (e.g. PROJ's live bar-tint preview)
+
+    public init(todo: ParsedTodo, done: Bool, pinTag: String, windowPoint: CGPoint,
+                actions: TodoRowMenuActions, onColorPreview: @escaping (String?) -> Void = { _ in },
+                onDismiss: @escaping () -> Void = {}) {
+        self.todo = todo
+        self.done = done
+        self.pinTag = pinTag
+        self.windowPoint = windowPoint
+        self.actions = actions
+        self.onColorPreview = onColorPreview
+        self.onDismiss = onDismiss
+    }
+}
+
+public struct TodoRowCallout: View {
     let todo: ParsedTodo
     let done: Bool
     let pinTag: String // "proj-pinned" (PROJ) | "pinned" (TODO panel)
@@ -37,6 +67,18 @@ struct TodoRowCallout: View {
     let actions: TodoRowMenuActions
     var onColorPreview: (String?) -> Void = { _ in }
     var onClose: () -> Void
+
+    public init(todo: ParsedTodo, done: Bool, pinTag: String, theme: Theme,
+                actions: TodoRowMenuActions, onColorPreview: @escaping (String?) -> Void = { _ in },
+                onClose: @escaping () -> Void) {
+        self.todo = todo
+        self.done = done
+        self.pinTag = pinTag
+        self.theme = theme
+        self.actions = actions
+        self.onColorPreview = onColorPreview
+        self.onClose = onClose
+    }
 
     @State private var priorityOpen = false // the Priority row's inline 1–5 expansion
 
@@ -49,7 +91,7 @@ struct TodoRowCallout: View {
         todo.colorSource == "line" ? todo.color : nil
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             colorRow.padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 6)
             Divider().padding(.bottom, 3)

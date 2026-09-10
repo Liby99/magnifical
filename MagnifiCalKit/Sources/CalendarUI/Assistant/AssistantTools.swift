@@ -315,7 +315,9 @@ struct SetDailyNoteTool: AssistantTool {
         guard let date = args["date"]?.stringValue, parseDate(date) != nil else {
             return .obj(["error": .str("missing or invalid 'date' (YYYY-MM-DD)")])
         }
-        e.setDailyNote(date, args["note"]?.stringValue ?? "")
+        // Same post-processing a manual edit session gets on close: unstamped top-level
+        // todos gain their created: date (the editor's pass never sees AI writes).
+        e.setDailyNote(date, TodoIndex.stampCreated(args["note"]?.stringValue ?? ""))
         return .obj(["ok": .bool(true), "date": .str(date)])
     }
 }
@@ -457,7 +459,8 @@ struct CreateEventTool: AssistantTool {
         }
         let title = args["title"]?.stringValue ?? "New event"
         let color = args["color"]?.stringValue ?? "blue"
-        let notes = mdUnescape(args["notes"]?.stringValue)
+        // created:-stamp any todos in the initial notes (the manual editor's session-end pass).
+        let notes = mdUnescape(args["notes"]?.stringValue).map { TodoIndex.stampCreated($0) }
         let tags = (args["tags"]?.arrayValue ?? []).compactMap(\.stringValue)
         let anchorTz = args["timezone"]?.stringValue
 
@@ -571,12 +574,14 @@ struct UpdateEventTool: AssistantTool {
         guard let itemKind = e.kind(of: id) else { return .obj(["error": .str("no item with id \(id)")]) }
         let patch = args["patch"] ?? .null
 
-        // notes: replace, or append to what's already there (the TODO-in-notes flow).
+        // notes: replace, or append to what's already there (the TODO-in-notes flow). Either
+        // way, run the manual editor's session-end pass so new todos get their created: stamp.
         var notes = mdUnescape(patch["notes"]?.stringValue)
         if notes == nil, let extra = mdUnescape(patch["appendNotes"]?.stringValue), !extra.isEmpty {
             let existing = e.notes(id)
             notes = existing.isEmpty ? extra : existing + "\n" + extra
         }
+        notes = notes.map { TodoIndex.stampCreated($0) }
 
         // repeat: object sets the recurrence, null / kind "none" clears it.
         if let rv = patch["repeat"] {
