@@ -142,6 +142,45 @@ public struct DeadlinesOverlay: View {
         return out
     }
 
+    /// Off-viewport deadlines' edge indicators: an EMPTY mini pill (fixed size, no text) beside
+    /// the edge-hugging line the Canvas draws — the same caret-toward-the-line shape, shrunken.
+    private struct EdgeSpec: Identifiable {
+        let id: String; let rect: CGRect; let onLeft: Bool; let color: String; let fade: Double
+    }
+
+    private func edgeSpecs(focus: Int, anim: PageAnim?, fadeMul: CGFloat) -> [EdgeSpec] {
+        let tl = timelineInfo(input, focus: focus, anim: anim)
+        guard tl.reveal > 0.05, tl.hourH > 0 else { return [] }
+        var gf = input; gf.focus = focus
+        var out: [EdgeSpec] = []
+        for d in deadlines {
+            if let only, d.id != only {
+                continue
+            }
+            if let hide, d.id == hide {
+                continue
+            }
+            guard let ep = deadlineEdgePos(d, input, focus: focus, anim: anim) else { continue }
+            let rd = relDomOf(input.year, focus, d.year, d.month, d.day) ?? -999
+            let spill = (input.z >= 1.5) ? spillFactor(d.month, gf, dim: EventsOverlay.spilloverDim) : 1
+            let fade = dailyFade(rd, gf) * tl.reveal * fadeMul * spill
+            if fade <= 0.02 {
+                continue
+            }
+            // Same side rule as the full label (deadlineLabelInfo), fixed mini size.
+            let onLeft = input.z > 2 || (ep.x + ep.w / 2 >= (Layout.labelW + input.vp.w) / 2)
+            let W = DeadlineEdgeLabel.width
+            let left = onLeft ? ep.x - DeadlineLabel.gap - W : ep.x + ep.w + DeadlineLabel.gap
+            out.append(EdgeSpec(
+                id: d.id,
+                rect: CGRect(x: left, y: ep.y - DeadlineEdgeLabel.height / 2,
+                             width: W, height: DeadlineEdgeLabel.height),
+                onLeft: onLeft, color: d.color, fade: Double(fade)
+            ))
+        }
+        return out
+    }
+
     public var body: some View {
         let anim = input.monthAnim
         let clipRight = dashboardLeftAnimated(input) // day-view dashboard mask (slides in from the right)
@@ -185,6 +224,12 @@ public struct DeadlinesOverlay: View {
         // dashboard mask edge when one is (pills must be occluded by the panel like Canvas content).
         let rightEdge = clipRight >= input.vp.w - 0.5 ? input.vp.w + Layout.labelW : clipRight
         ZStack(alignment: .topLeading) {
+            ForEach(edgeSpecs(focus: focus, anim: anim, fadeMul: fadeMul)) { s in
+                MiniDeadlinePill(color: theme.eventBorder(s.color), onLeft: s.onLeft, theme: theme)
+                    .frame(width: s.rect.width, height: s.rect.height)
+                    .opacity(s.fade)
+                    .position(x: s.rect.midX, y: s.rect.midY)
+            }
             ForEach(all) { s in
                 let a = activation(s.id)
                 let base = sides[s.id] ?? s.info.defaultOnLeft // offline assignment (fallback: default)
@@ -261,6 +306,36 @@ private struct DeadlinePill: View {
                 .offset(x: pointsRight ? 6 : -6)
         }
         .opacity(shown ? 1 : 0)
+    }
+}
+
+/// The edge indicator's EMPTY label: the deadline pill's exact chrome (glass base, rounded
+/// corners, side border + caret pointing into the line) at a fixed mini size — no title, no
+/// time, no activation styling (the indicator is render-only).
+private struct MiniDeadlinePill: View {
+    let color: Color
+    let onLeft: Bool // pill sits left of the column → caret on its RIGHT edge (points in)
+    let theme: Theme
+    var body: some View {
+        let r = DeadlineEdgeLabel.radius
+        let shape = RoundedRectangle(cornerRadius: r)
+        ZStack {
+            shape.fill(theme.bg) // occlude the timeline behind, like the full pill
+            Color.clear.glassEffectCompat(
+                .regular.tint(color.opacity(EventActivation.plain.tint * theme.eventTintScale)),
+                in: shape
+            )
+        }
+        .overlay {
+            SideBorder(pointsRight: onLeft, radius: r).strokeBorder(color, lineWidth: 1)
+        }
+        .overlay {
+            Caret(pointsRight: onLeft).fill(color)
+                .frame(width: 4, height: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: onLeft ? .trailing : .leading)
+                .offset(x: onLeft ? 4 : -4)
+        }
     }
 }
 

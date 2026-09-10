@@ -133,10 +133,12 @@ public struct Deadline: Sendable, Identifiable, Equatable, Codable {
     }
 }
 
-/// A deadline's line position on the day-detail timeline: a horizontal rule across the
-/// day column at the deadline's hour. nil when off the focused window or scrolled out.
-public func deadlinePos(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
-                        anim: PageAnim? = nil) -> (x: CGFloat, y: CGFloat, w: CGFloat)? {
+/// A deadline's UNCULLED line position on the timeline: the day column resolved and the y
+/// computed from the hour + scroll, WITHOUT the vertical viewport cull — shared head of
+/// deadlinePos (which culls to the visible strip) and deadlineEdgePos (which wants exactly
+/// the culled ones).
+private func deadlineRawPos(_ d: Deadline, _ g: SceneInput, focus: Int?,
+                            anim: PageAnim?) -> (x: CGFloat, y: CGFloat, w: CGFloat)? {
     let mo = focus ?? g.focus
     let tl = timelineInfo(g, focus: focus, anim: anim)
     // relDomOf gates adjacency (incl. across the year boundary) — an off-year, non-neighbor deadline
@@ -158,11 +160,44 @@ public func deadlinePos(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
             return nil
         }
     }
-    let y = tl.tlTop + d.hour * tl.hourH - tl.scroll
-    if y < tl.tlTop || y > tl.tlBottom {
+    return (x, tl.tlTop + d.hour * tl.hourH - tl.scroll, tl.colW)
+}
+
+/// A deadline's line position on the day-detail timeline: a horizontal rule across the
+/// day column at the deadline's hour. nil when off the focused window or scrolled out.
+public func deadlinePos(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
+                        anim: PageAnim? = nil) -> (x: CGFloat, y: CGFloat, w: CGFloat)? {
+    guard let pos = deadlineRawPos(d, g, focus: focus, anim: anim) else { return nil }
+    let tl = timelineInfo(g, focus: focus, anim: anim)
+    if pos.y < tl.tlTop || pos.y > tl.tlBottom {
         return nil
     }
-    return (x, y, tl.colW)
+    return pos
+}
+
+/// An OFF-VIEWPORT deadline's edge-indicator position: the moment line clamped just inside the
+/// timeline's top/bottom edge (mirroring the timed events' edge slivers). Non-nil exactly when
+/// the deadline's column is visible but its hour is scrolled out — mutually exclusive with
+/// deadlinePos by construction. `top` = it left through the TOP edge.
+public func deadlineEdgePos(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
+                            anim: PageAnim? = nil) -> (x: CGFloat, y: CGFloat, w: CGFloat, top: Bool)? {
+    guard let pos = deadlineRawPos(d, g, focus: focus, anim: anim) else { return nil }
+    let tl = timelineInfo(g, focus: focus, anim: anim)
+    if pos.y < tl.tlTop {
+        return (pos.x, tl.tlTop + 1, pos.w, true)
+    }
+    if pos.y > tl.tlBottom {
+        return (pos.x, tl.tlBottom - 1, pos.w, false)
+    }
+    return nil
+}
+
+/// The edge indicator's EMPTY mini label: the deadline pill's shape (rounded corners, side
+/// border, caret) at a fixed small size — no title, no time.
+public enum DeadlineEdgeLabel {
+    public static let width: CGFloat = 26
+    public static let height: CGFloat = 15
+    public static let radius: CGFloat = 5
 }
 
 /// ── Deadline side-label placement (shared by the SwiftUI pill AND the pointer hit-test) ─────

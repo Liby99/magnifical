@@ -372,6 +372,34 @@ import SwiftUI
                 layer.fill(dot, with: .color(theme.bg)); layer.stroke(dot, with: .color(color), lineWidth: 1.5)
             }
         }
+        // Off-viewport deadlines: a thin edge line hugging the timeline's top/bottom (the timed
+        // events' edge-sliver idea) — same column span, TINY solid end dots (the on-screen line's
+        // hollow dots shrink to filled points). The matching empty mini pill is DeadlinesOverlay's.
+        for d in deadlines {
+            if let only, d.id != only {
+                continue
+            }
+            if let hide, d.id == hide {
+                continue
+            }
+            guard let ep = deadlineEdgePos(d, input, focus: focus, anim: anim) else { continue }
+            let rd = relDomOf(input.year, focus, d.year, d.month, d.day) ?? -999
+            let spill = (input.z >= 1.5) ? spillFactor(d.month, gf) : 1
+            let fade = dailyFade(rd, gf) * tl.reveal * fadeMul * spill
+            if fade <= 0.02 {
+                continue
+            }
+            var layer = clip
+            layer.opacity = Double(fade)
+            let color = theme.eventBorder(d.color)
+            var line = Path()
+            line.move(to: CGPoint(x: ep.x, y: ep.y)); line.addLine(to: CGPoint(x: ep.x + ep.w, y: ep.y))
+            layer.stroke(line, with: .color(color), lineWidth: 1.5)
+            for cx in [ep.x, ep.x + ep.w] {
+                let dot = Path(ellipseIn: CGRect(x: cx - 1.5, y: ep.y - 1.5, width: 3, height: 3))
+                layer.fill(dot, with: .color(color))
+            }
+        }
     }
 
     /// ── Per-item ────────────────────────────────────────────────────────────────
