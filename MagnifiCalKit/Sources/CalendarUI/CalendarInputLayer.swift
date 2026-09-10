@@ -548,6 +548,31 @@ final class CatcherView: NSView, NSMenuItemValidation {
     private var pinchTarget = PinchTarget.viewZoom
     private enum PinchTarget { case viewZoom, tlScale }
 
+    /// ── Raw trackpad touch tracking (the pinch axis) ─────────────────────────────────
+    /// Axis of the current two-finger touch pair — degrees from the horizontal (90 = vertical),
+    /// components scaled by the pad's physical `deviceSize` (normalizedPosition is per-axis 0…1,
+    /// so a wide trackpad would otherwise overstate verticality). Tracked via the touch responder
+    /// callbacks because the magnify event's OWN touch set is typically empty at `.began` — the
+    /// touches arrive as separate events, before the gesture is recognized. nil unless exactly
+    /// two fingers are down (resting thumb, Magic Mouse).
+    private var touchAxisDeg: CGFloat?
+
+    override func touchesBegan(with event: NSEvent) { updateTouchAxis(event) }
+    override func touchesMoved(with event: NSEvent) { updateTouchAxis(event) }
+    override func touchesEnded(with event: NSEvent) { updateTouchAxis(event) }
+    override func touchesCancelled(with event: NSEvent) { touchAxisDeg = nil }
+
+    private func updateTouchAxis(_ e: NSEvent) {
+        // in: nil — all the window's touches, not just ones that began over this view.
+        let touches = Array(e.touches(matching: .touching, in: nil))
+        guard touches.count == 2 else { touchAxisDeg = nil; return }
+        let dev = touches[0].deviceSize
+        let dx = (touches[0].normalizedPosition.x - touches[1].normalizedPosition.x) * dev.width
+        let dy = (touches[0].normalizedPosition.y - touches[1].normalizedPosition.y) * dev.height
+        guard abs(dx) > 0.001 || abs(dy) > 0.001 else { return }
+        touchAxisDeg = atan2(abs(dy), abs(dx)) * 180 / .pi
+    }
+
     override func magnify(with e: NSEvent) {
         if modalActive {
             return
@@ -556,7 +581,7 @@ final class CatcherView: NSView, NSMenuItemValidation {
         let ended = e.phase.contains(.ended) || e.phase.contains(.cancelled)
         if began {
             pinchTarget = .viewZoom
-            if let deg = pinchAxisDeg(e), engine?.pinchScalesTimeline(angleDeg: deg, at: point(e)) == true {
+            if let deg = touchAxisDeg, engine?.pinchScalesTimeline(angleDeg: deg, at: point(e)) == true {
                 pinchTarget = .tlScale
             }
         }
@@ -576,21 +601,6 @@ final class CatcherView: NSView, NSMenuItemValidation {
         if ended {
             pinchTarget = .viewZoom
         }
-    }
-
-    /// The pinch AXIS angle vs. the horizontal, in degrees (0 = flat, 90 = vertical), from the
-    /// raw trackpad touches the gesture event carries (delivered because the view allows
-    /// `.indirect` touches). `normalizedPosition` is per-axis 0…1, so each component is scaled by
-    /// `deviceSize` — a wide trackpad would otherwise overstate how vertical the pinch is.
-    /// nil when the touch set isn't exactly two fingers (resting thumb, Magic Mouse, synthesized).
-    private func pinchAxisDeg(_ e: NSEvent) -> CGFloat? {
-        let touches = Array(e.touches(matching: .touching, in: self))
-        guard touches.count == 2 else { return nil }
-        let dev = touches[0].deviceSize
-        let dx = (touches[0].normalizedPosition.x - touches[1].normalizedPosition.x) * dev.width
-        let dy = (touches[0].normalizedPosition.y - touches[1].normalizedPosition.y) * dev.height
-        guard abs(dx) > 0.001 || abs(dy) > 0.001 else { return nil }
-        return atan2(abs(dy), abs(dx)) * 180 / .pi
     }
 
     /// ── Right-click (or ctrl-click) on an event → the context callout ──

@@ -43,6 +43,18 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.3.4", date: "September 10, 2026",
+            headline: "Pinch the timeline taller, and nothing slips off its edge unseen.",
+            changes: [
+                .init(.added, "**Pinch vertically** over the week/day timeline to stretch or squeeze the hours — the same scale the edge bar drags, anchored on the hour under your fingers. Any other pinch still zooms between views."),
+                .init(.added, "**Deadlines** scrolled out of the timeline hold at its edge — a thin line with a small empty deadline pill — just like timed events' edge cards."),
+                .init(.added, "The **current-time line** does the same: scrolled out of view, it leaves a thin accent edge line with a mini *now* tag."),
+                .init(.improved, "The timeline-edge deadline **quick-add \"+\"** lights up in the accent color on hover instead of darkening."),
+                .init(.fixed, "Todos written by the **AI assistant** get their `created:` stamp, so they age and sort like hand-written ones."),
+                .init(.fixed, "**Right-clicking a TODO/PROJ row** opens its menu instantly, and Delete no longer freezes the app."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.3.3", date: "September 4, 2026",
             headline: "iCloud sync can no longer wedge itself.",
             changes: [

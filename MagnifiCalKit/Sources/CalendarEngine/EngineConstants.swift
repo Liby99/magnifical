@@ -21,7 +21,7 @@ enum Motion {
     /// from the horizontal, 90 = perfectly vertical — scales the week/day timeline's hour height
     /// instead of zooming between views. Tune to taste: higher = a stricter "deliberately
     /// vertical" cone before the pinch is captured for timeline scaling.
-    static let tlPinchMinAngleDeg: CGFloat = 82
+    static let tlPinchMinAngleDeg: CGFloat = 80
     static let tlPinchSens: CGFloat = 1.0 // vertical-pinch magnification → hour-height exponent
 
     // ── jumpToDay choreography (fly out → travel → fly in) ──
