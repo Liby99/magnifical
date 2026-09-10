@@ -583,6 +583,43 @@ extension CalendarEngine {
         }
     }
 
+    /// ── Vertical pinch → timeline scale (instead of view zoom) ─────────────────────────
+    /// Whether a pinch whose axis is `angleDeg` steep (0 = horizontal, 90 = vertical) starting
+    /// with the pointer at `p` should scale the week/day timeline's hour height rather than zoom
+    /// between views: needs week/day level, the pointer inside a zoomable timeline, and an axis
+    /// steeper than `Motion.tlPinchMinAngleDeg`. The catcher decides once at `.began` and latches.
+    public func pinchScalesTimeline(angleDeg: CGFloat, at p: CGPoint) -> Bool {
+        guard angleDeg >= Motion.tlPinchMinAngleDeg, level(z) >= 2, !inDayDashboard(p) else { return false }
+        let tl = timelineInfo(snapshot())
+        return tl.zoomable && tl.hourH > 0 && p.y > tl.tlTop && p.y < tl.tlBottom
+    }
+
+    /// Scale the timeline under a vertical pinch: exponential in the accumulated magnification
+    /// (so pinch-in and pinch-out are symmetric, same reason pinchDelta uses the log), holding
+    /// the hour under the fingers fixed at the pointer's y. This drives the SAME `weekHourH` the
+    /// scale bar's end-drag does — persisted once on gesture end (setWeekHourH's change guard
+    /// would skip the write, since the height was already applied live).
+    public func onTimelineScale(delta: CGFloat, at p: CGPoint, began: Bool, ended: Bool) {
+        wake()
+        if began {
+            let tl = timelineInfo(snapshot())
+            tlScaleStartH = tl.hourH > 0 ? tl.hourH : weekHourH // effective height, not the stored pref
+            tlScaleAccum = 0
+            tlScaleAnchor = tl.hourH > 0 && p.y > tl.tlTop && p.y < tl.tlBottom
+                ? ((p.y - tl.tlTop + tl.scroll) / tl.hourH, p.y) : nil
+        } else if ended {
+            tlScaleAnchor = nil
+            UserDefaults.standard.set(Double(weekHourH), forKey: PrefKeys.weekHourH)
+        } else {
+            tlScaleAccum += delta
+            weekHourH = clampHourH(tlScaleStartH * CGFloat(exp(Double(tlScaleAccum * Motion.tlPinchSens))))
+            let tl = timelineInfo(snapshot()) // re-derived at the new height
+            if let a = tlScaleAnchor {
+                tlScroll = min(max(0, a.hour * tl.hourH - (a.y - tl.tlTop)), tl.maxScroll)
+            }
+        }
+    }
+
     /// Capture the hour to hold at the viewport centre for the whole of a zoom gesture. It must be held
     /// (not recomputed per frame): near month view `maxScroll → 0` clamps the scroll, so a per-frame
     /// re-derivation would collapse the anchor back to the geometric centre (noon). A view with scroll

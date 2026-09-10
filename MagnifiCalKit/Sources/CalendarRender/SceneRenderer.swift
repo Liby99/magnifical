@@ -25,7 +25,8 @@ import SwiftUI
 
     /// now-line / mouse cursor + their labels — drawn in the top pass, above everything.
     private static func isForeground(_ k: ItemKind) -> Bool {
-        switch k { case .now, .nowLabel, .cursor, .timeTag: return true; default: return false }
+        switch k { case .now, .nowLabel, .nowEdge, .nowLabelEdge, .cursor, .timeTag: return true
+        default: return false }
     }
 
     /// Two disjoint regions. Content items clip to the content rect; gutter items
@@ -450,8 +451,18 @@ import SwiftUI
             )
         case .weekdayTag:
             drawPillText(it.text ?? "", it.rect, size: it.fontSize ?? 9, color: theme.text, theme: theme, into: &ctx)
+        case .nowEdge:
+            // "now" scrolled off-screen: a thin accent line hugging the timeline edge with TINY
+            // solid end dots — the deadline edge indicator's styling in the now-line's color.
+            ctx.fill(Path(it.rect), with: .color(theme.nowLine))
+            for cx in [it.x, it.x + it.w] {
+                let dot = Path(ellipseIn: CGRect(x: cx - 1.5, y: it.rect.midY - 1.5, width: 3, height: 3))
+                ctx.fill(dot, with: .color(theme.nowLine))
+            }
         case .nowLabel:
             break // the CURRENT TIME label is rendered in SwiftUI (EventsOverlay) for real glass
+        case .nowLabelEdge:
+            break // the edge "now" mini tag is SwiftUI too (TimeTagsOverlay, mini branch)
         case .timeTag:
             break // the mouse-cursor time tag is rendered in SwiftUI (EventsOverlay) — see cursorTagView
         case .event: break

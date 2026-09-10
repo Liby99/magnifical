@@ -36,6 +36,10 @@ struct InputCatcher: NSViewRepresentable {
 
     func makeNSView(context: Context) -> CatcherView {
         let v = CatcherView()
+        // Trackpad touch data on gesture events (magnify carries the two fingertip positions),
+        // so the pinch AXIS is recoverable — a near-vertical pinch scales the timeline instead
+        // of zooming views. Only enables NSTouch delivery; scroll/click routing is unchanged.
+        v.allowedTouchTypes = [.indirect]
         v.engine = engine
         v.monthBridge = monthBridge
         v.weekBridge = weekBridge
@@ -538,21 +542,55 @@ final class CatcherView: NSView, NSMenuItemValidation {
         }
     }
 
+    /// What the current pinch drives. Decided ONCE at `.began` and latched: the inter-touch axis
+    /// drifts as the fingers move, and flipping between view zoom and timeline scale mid-gesture
+    /// would be jarring (same latch idea as the day-view scroll's dayAxis).
+    private var pinchTarget = PinchTarget.viewZoom
+    private enum PinchTarget { case viewZoom, tlScale }
+
     override func magnify(with e: NSEvent) {
         if modalActive {
             return
         }
         let began = e.phase.contains(.began)
         let ended = e.phase.contains(.ended) || e.phase.contains(.cancelled)
+        if began {
+            pinchTarget = .viewZoom
+            if let deg = pinchAxisDeg(e), engine?.pinchScalesTimeline(angleDeg: deg, at: point(e)) == true {
+                pinchTarget = .tlScale
+            }
+        }
         if CCTrace.on {
             if began {
-                CCTrace.event("pinchBegan L\(engine?.chrome.level ?? -1)")
+                CCTrace.event("pinchBegan L\(engine?.chrome.level ?? -1)\(pinchTarget == .tlScale ? " tlScale" : "")")
             }
             if ended {
                 CCTrace.event("pinchEnded")
             }
         }
-        engine?.onMagnify(delta: e.magnification, at: point(e), began: began, ended: ended)
+        if pinchTarget == .tlScale {
+            engine?.onTimelineScale(delta: e.magnification, at: point(e), began: began, ended: ended)
+        } else {
+            engine?.onMagnify(delta: e.magnification, at: point(e), began: began, ended: ended)
+        }
+        if ended {
+            pinchTarget = .viewZoom
+        }
+    }
+
+    /// The pinch AXIS angle vs. the horizontal, in degrees (0 = flat, 90 = vertical), from the
+    /// raw trackpad touches the gesture event carries (delivered because the view allows
+    /// `.indirect` touches). `normalizedPosition` is per-axis 0…1, so each component is scaled by
+    /// `deviceSize` — a wide trackpad would otherwise overstate how vertical the pinch is.
+    /// nil when the touch set isn't exactly two fingers (resting thumb, Magic Mouse, synthesized).
+    private func pinchAxisDeg(_ e: NSEvent) -> CGFloat? {
+        let touches = Array(e.touches(matching: .touching, in: self))
+        guard touches.count == 2 else { return nil }
+        let dev = touches[0].deviceSize
+        let dx = (touches[0].normalizedPosition.x - touches[1].normalizedPosition.x) * dev.width
+        let dy = (touches[0].normalizedPosition.y - touches[1].normalizedPosition.y) * dev.height
+        guard abs(dx) > 0.001 || abs(dy) > 0.001 else { return nil }
+        return atan2(abs(dy), abs(dx)) * 180 / .pi
     }
 
     /// ── Right-click (or ctrl-click) on an event → the context callout ──

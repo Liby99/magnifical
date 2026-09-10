@@ -275,7 +275,11 @@ public struct TimeTagsOverlay: View {
         ZStack(alignment: .topLeading) {
             ZStack(alignment: .topLeading) {
                 ForEach(nowLabelSpecs(input)) { spec in
-                    nowLabelView(spec)
+                    if spec.mini {
+                        miniNowTagView(spec)
+                    } else {
+                        nowLabelView(spec)
+                    }
                 }
             }
             .clipShape(RectClip(rect: CGRect(
@@ -338,6 +342,27 @@ public struct TimeTagsOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: pointsRight ? .trailing : .leading)
             .offset(x: pointsRight ? 5 : -5)
             .opacity(shown ? 1 : 0)
+    }
+
+    /// The edge indicator's mini tag — the CURRENT TIME pill's chrome (glass, border, caret)
+    /// at a fixed small size, saying just "now" (shown when the now-line is scrolled off-screen).
+    @ViewBuilder private func miniNowTagView(_ spec: NowLabelSpec) -> some View {
+        let red = theme.nowLine
+        let shape = RoundedRectangle(cornerRadius: 6)
+        let baseFill: Color = (theme.dark ? Color.black : Color.white).opacity(theme.dark ? 0.55 : 0.62)
+        let glassTint = red.opacity(theme.dark ? 0.5 : 0.14)
+        Text(spec.text)
+            .font(.system(size: 9, weight: .bold)).foregroundStyle(red)
+            .fixedSize()
+            .frame(width: spec.rect.width, height: spec.rect.height)
+            .background(shape.fill(baseFill))
+            .glassEffectCompat(.regular.tint(glassTint), in: shape)
+            .overlay(shape.strokeBorder(red, lineWidth: 1))
+            .overlay { flipCaret(pointsRight: true, shown: spec.pointsRight, color: red, h: 6) }
+            .overlay { flipCaret(pointsRight: false, shown: !spec.pointsRight, color: red, h: 6) }
+            .opacity(spec.opacity)
+            .position(x: spec.rect.midX, y: spec.rect.midY)
+            .allowsHitTesting(false)
     }
 
     @ViewBuilder private func nowLabelView(_ spec: NowLabelSpec) -> some View {

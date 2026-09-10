@@ -17,6 +17,12 @@ enum Motion {
     static let dashPinDur: TimeInterval = 0.3 // ⌘B/⌘E/⌘J dashboard pin slide
     static let weekDashSettleDur: TimeInterval = 0.28 // weekly-dashboard carousel settle
     static let pinchSens: CGFloat = 1.6 // trackpad magnification → z units
+    /// A pinch whose AXIS (the line between the two fingertips) is steeper than this — degrees
+    /// from the horizontal, 90 = perfectly vertical — scales the week/day timeline's hour height
+    /// instead of zooming between views. Tune to taste: higher = a stricter "deliberately
+    /// vertical" cone before the pinch is captured for timeline scaling.
+    static let tlPinchMinAngleDeg: CGFloat = 82
+    static let tlPinchSens: CGFloat = 1.0 // vertical-pinch magnification → hour-height exponent
 
     // ── jumpToDay choreography (fly out → travel → fly in) ──
     static let flyOutDur: TimeInterval = 0.58 // zoom out to year before travelling

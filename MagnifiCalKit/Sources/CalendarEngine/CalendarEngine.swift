@@ -430,6 +430,10 @@ public final class CalendarEngine {
     // pinch state
     var magStartZ: CGFloat = 0
     var magAccum: CGFloat = 0
+    // vertical-pinch timeline scale state (see onTimelineScale)
+    var tlScaleStartH: CGFloat = 0
+    var tlScaleAccum: CGFloat = 0
+    var tlScaleAnchor: (hour: CGFloat, y: CGFloat)? // hour under the fingers + its view y, held for the gesture
     private var nowTimer: Timer?
     // pointer / editing state
     var drag: Drag?

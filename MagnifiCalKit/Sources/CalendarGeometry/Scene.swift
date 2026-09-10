@@ -59,6 +59,7 @@ public struct NowLabelSpec: Sendable, Identifiable {
     public var altText: String? // second line when the alt-tz column is on: "13:45 (PST)"
     public var pointsRight: Bool // caret side: true → label sits left of the column, points right
     public var opacity: CGFloat
+    public var mini: Bool = false // the edge indicator's small "now" tag (now scrolled off-screen)
 }
 
 public func nowLabelSpecs(_ g: SceneInput) -> [NowLabelSpec] {
@@ -69,9 +70,12 @@ public func nowLabelSpecs(_ g: SceneInput) -> [NowLabelSpec] {
         return altClockText(minutes: c.hour * 60 + c.minute, deltaHours: d, label: g.altLabel)
     }
     return buildScene(g).items.compactMap { it in
-        guard it.kind == .nowLabel, it.opacity > 0.01 else { return nil }
-        return NowLabelSpec(id: it.key, rect: it.rect, text: it.text ?? "", altText: altText,
-                            pointsRight: it.align == .right, opacity: it.opacity)
+        guard it.kind == .nowLabel || it.kind == .nowLabelEdge, it.opacity > 0.01 else { return nil }
+        // The edge tag carries no alt-tz line — it's a fixed mini pill that just says "now".
+        return NowLabelSpec(id: it.key, rect: it.rect, text: it.text ?? "",
+                            altText: it.kind == .nowLabelEdge ? nil : altText,
+                            pointsRight: it.align == .right, opacity: it.opacity,
+                            mini: it.kind == .nowLabelEdge)
     }
 }
 
@@ -152,6 +156,27 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
     // incl. across the Dec↔Jan year boundary) — so the boundary-week highlight tracks a neighbor-year
     // "today" too, not only same-year days.
     let relDom = relDomOf(g.year, g.focus, clock.year, tMonth, tDom)
+
+    /// The now-line's edge indicator when "now" is scrolled out of the timeline (the deadline
+    /// edge-indicator treatment, in the now-line's own styling): a thin accent line hugging the
+    /// top/bottom edge + a fixed mini tag that just says "now". Two items, opacity-gated like
+    /// the on-screen pair.
+    func nowEdge(_ keyBase: String, _ x: CGFloat, _ colW: CGFloat, _ lineY: CGFloat,
+                 tlTop: CGFloat, tlBottom: CGFloat, _ active: Bool, gate: CGFloat = 1) -> [Item] {
+        let out = lineY < tlTop || lineY > tlBottom
+        let on = active && out
+        let edgeY = lineY < tlTop ? tlTop + 1 : tlBottom - 1
+        let W: CGFloat = 44, H: CGFloat = 17, GAP: CGFloat = 10
+        let onLeft = g.z > 2 || x + colW / 2 >= (Layout.labelW + g.vp.w) / 2
+        return [
+            Item(key: keyBase + "-edge", kind: .nowEdge, x: x, y: edgeY, w: colW, h: 1.5,
+                 opacity: on ? mul * gate : 0, instant: g.z > 2, z: g.z > 2 ? 16 : 6),
+            Item(key: keyBase + "-edgetag", kind: .nowLabelEdge,
+                 x: onLeft ? x - GAP - W : x + colW + GAP, y: edgeY - H / 2, w: W, h: H,
+                 opacity: on ? mul * gate : 0, text: "now",
+                 align: onLeft ? .right : .left, instant: g.z > 2, z: g.z > 2 ? 16 : 9),
+        ]
+    }
 
     func nowLabel(_ key: String, _ x: CGFloat, _ colW: CGFloat, _ lineY: CGFloat, _ active: Bool,
                   gate: CGFloat = 1) -> Item {
@@ -248,6 +273,8 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
         let lineOn = active && detail && m.hourH > 0 && lineY >= tlTop && lineY <= tlBottom
         items.append(Item(key: "now-m", kind: .now, x: x, y: lineY, w: colW, h: 2, opacity: lineOn ? mul : 0, z: 6))
         items.append(nowLabel("nl-m", x, colW, lineY, lineOn))
+        items += nowEdge("now-m", x, colW, lineY, tlTop: tlTop, tlBottom: tlBottom,
+                         active && detail && m.hourH > 0)
     }
     // Week: today's column when in the visible 7-day window
     do {
@@ -292,6 +319,8 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
             z: g.z > 2 ? 16 : 6
         ))
         items.append(nowLabel("nl-w", x, colW, lineY, lineOn, gate: dgate))
+        items += nowEdge("now-w", x, colW, lineY, tlTop: tlTop, tlBottom: tlBottom,
+                         active && m.hourH > 0, gate: dgate)
     }
 
     if !keyTag.isEmpty {
