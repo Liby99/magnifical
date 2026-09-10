@@ -52,12 +52,13 @@ public struct Hover: Sendable, Equatable {
     public var nearLeft: Bool?
     public var overTimed: Bool // cursor is over a timed event → hide the cursor LINE, keep the end dots + tag
     public var overDeadline: Bool // cursor is over a deadline → hide the whole cursor (line, dots, tag)
+    public var overNowTag: Bool // cursor is over the edge "now" mini tag → mild hover styling
     public init(month: Int? = nil, dom: Int? = nil, week: Int? = nil, track: Int? = nil, hour: Int? = nil,
                 hourFrac: CGFloat? = nil, nameMonth: Int? = nil, nearLeft: Bool? = nil,
-                overTimed: Bool = false, overDeadline: Bool = false) {
+                overTimed: Bool = false, overDeadline: Bool = false, overNowTag: Bool = false) {
         self.month = month; self.dom = dom; self.week = week; self.track = track; self.hour = hour
         self.hourFrac = hourFrac; self.nameMonth = nameMonth; self.nearLeft = nearLeft
-        self.overTimed = overTimed; self.overDeadline = overDeadline
+        self.overTimed = overTimed; self.overDeadline = overDeadline; self.overNowTag = overNowTag
     }
 
     public static let none = Hover()

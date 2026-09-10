@@ -79,6 +79,15 @@ public func nowLabelSpecs(_ g: SceneInput) -> [NowLabelSpec] {
     }
 }
 
+/// The edge "now" mini tag's rect(s) — non-empty exactly while the now-line is scrolled out and
+/// its edge indicator shows. Derived from the built scene (like nowLabelSpecs), so the click
+/// hit-region and the drawn tag always agree.
+public func nowEdgeTagRects(_ g: SceneInput) -> [CGRect] {
+    buildScene(g).items.compactMap { it in
+        it.kind == .nowLabelEdge && it.opacity > 0.01 ? it.rect : nil
+    }
+}
+
 /// The mouse-cursor time tag, rendered as a SwiftUI glass pill (not in the Canvas) so it isn't clipped
 /// at the gutter edge AND its left/right side can animate smoothly on a flip (e.g. week↔day). Mirrors
 /// nowLabelSpecs: derived from the built scene's `cur-tag` item so it inherits all placement logic.

@@ -349,19 +349,25 @@ public struct TimeTagsOverlay: View {
     @ViewBuilder private func miniNowTagView(_ spec: NowLabelSpec) -> some View {
         let red = theme.nowLine
         let shape = RoundedRectangle(cornerRadius: 6)
+        // Mild hover (the engine reports it via hover.overNowTag — the tag is a click target:
+        // scroll-to-center-now): slightly stronger tint + border and a small scale-up. The
+        // pointing-hand cursor comes from the engine's cursor shape, like the edge stacks.
+        let hovered = input.hover.overNowTag
         let baseFill: Color = (theme.dark ? Color.black : Color.white).opacity(theme.dark ? 0.55 : 0.62)
-        let glassTint = red.opacity(theme.dark ? 0.5 : 0.14)
+        let glassTint = red.opacity(theme.dark ? (hovered ? 0.65 : 0.5) : (hovered ? 0.22 : 0.14))
         Text(spec.text)
             .font(.system(size: 9, weight: .bold)).foregroundStyle(red)
             .fixedSize()
             .frame(width: spec.rect.width, height: spec.rect.height)
             .background(shape.fill(baseFill))
             .glassEffectCompat(.regular.tint(glassTint), in: shape)
-            .overlay(shape.strokeBorder(red, lineWidth: 1))
+            .overlay(shape.strokeBorder(red, lineWidth: hovered ? 1.5 : 1))
             .overlay { flipCaret(pointsRight: true, shown: spec.pointsRight, color: red, h: 6) }
             .overlay { flipCaret(pointsRight: false, shown: !spec.pointsRight, color: red, h: 6) }
+            .scaleEffect(hovered ? 1.07 : 1)
             .opacity(spec.opacity)
             .position(x: spec.rect.midX, y: spec.rect.midY)
+            .animation(.easeOut(duration: 0.12), value: hovered)
             .allowsHitTesting(false)
     }
 

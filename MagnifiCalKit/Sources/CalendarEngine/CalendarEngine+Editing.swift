@@ -144,6 +144,24 @@ extension CalendarEngine {
         scrollTimelineTo(topHour: t.topHour - margin, botHour: t.botHour + margin)
     }
 
+    /// Is `p` on the now-line's edge "now" mini tag? (Rects from the built scene — non-empty
+    /// exactly while the now-line is scrolled out — so hit region and drawn tag always agree.)
+    func nowEdgeTagHit(at p: CGPoint, _ g: SceneInput) -> Bool {
+        nowEdgeTagRects(g).contains { $0.insetBy(dx: -2, dy: -2).contains(p) }
+    }
+
+    /// Click on the edge "now" tag: glide the timeline so the current time sits CENTERED.
+    /// Passing a viewport-height window around now to scrollTimelineTo pins its top at
+    /// nowFrac − halfSpan (clamped at the day's ends), i.e. now lands mid-viewport.
+    func revealNowLine() {
+        let tl = timelineInfo(snapshot())
+        guard tl.hourH > 0 else { return }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let nowFrac = CGFloat(c.hour ?? 0) + CGFloat(c.minute ?? 0) / 60
+        let halfSpan = (tl.tlBottom - tl.tlTop) / tl.hourH / 2
+        scrollTimelineTo(topHour: nowFrac - halfSpan, botHour: nowFrac + halfSpan)
+    }
+
     func createSpot(at p: CGPoint, _ g: SceneInput) -> (year: Int, month: Int, day: Int, anchor: CGFloat)? {
         let tl = timelineInfo(g)
         guard tl.reveal > 0.05, tl.hourH > 0, p.y >= tl.tlTop, p.y <= tl.tlBottom else { return nil }
