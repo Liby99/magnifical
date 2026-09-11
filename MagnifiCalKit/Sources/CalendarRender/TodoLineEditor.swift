@@ -41,28 +41,43 @@
         }
 
         func makeNSView(context: Context) -> NSScrollView {
+            let h = MarkdownHighlight.lineHeight + 6
             let tv = FieldView()
             tv.isRichText = false
             tv.allowsUndo = true
             tv.drawsBackground = false
+            tv.isAutomaticQuoteSubstitutionEnabled = false
+            tv.isAutomaticDashSubstitutionEnabled = false
+            tv.isAutomaticTextReplacementEnabled = false
             tv.textContainerInset = NSSize(width: 4, height: 3)
             tv.font = MarkdownHighlight.monoFont()
+            tv.typingAttributes = MarkdownHighlight.baseAttributes(NSColor(theme.text))
+            tv.insertionPointColor = NSColor(theme.text) // caret in the text color, not system blue
+            tv.selectedTextAttributes = [ // selection in the ACCENT, like the note editor
+                .backgroundColor: NSColor(Theme.accent).withAlphaComponent(0.24),
+            ]
             tv.delegate = context.coordinator
-            // Single visual line: never wrap — the container is unbounded and the text view
-            // grows horizontally; the enclosing scroll view pans to keep the caret visible.
+            // Single visual line: never wrap — the container is unbounded, the text view SIZES
+            // to its text (never smaller than the clip; see LineClipScrollView), and the scroll
+            // view pans to keep the caret visible. The explicit frame matters: NSTextView()
+            // starts at .zero and nothing ever draws in a zero-width view.
+            tv.frame = NSRect(x: 0, y: 0, width: 120, height: h)
+            tv.minSize = NSSize(width: 0, height: h)
+            tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: h)
             tv.isHorizontallyResizable = true
             tv.isVerticallyResizable = false
-            tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: MarkdownHighlight.lineHeight + 6)
+            tv.autoresizingMask = []
             tv.textContainer?.widthTracksTextView = false
-            tv.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
-                                                     height: MarkdownHighlight.lineHeight)
+            tv.textContainer?.heightTracksTextView = false
+            tv.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: h)
             tv.onCommit = { [weak coordinator = context.coordinator] in coordinator?.finish(cancel: false) }
             tv.onCancel = { [weak coordinator = context.coordinator] in coordinator?.finish(cancel: true) }
             tv.string = initial
+            tv.sizeToFit()
             context.coordinator.textView = tv
             context.coordinator.restyle()
 
-            let sv = NSScrollView()
+            let sv = LineClipScrollView()
             sv.documentView = tv
             sv.drawsBackground = false
             sv.borderType = .noBorder
@@ -76,6 +91,19 @@
                 tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
             }
             return sv
+        }
+
+        /// Keeps the text view at least as wide as the visible clip (short text would otherwise
+        /// leave a sliver-width document with the caret hugging its right edge).
+        final class LineClipScrollView: NSScrollView {
+            override func tile() {
+                super.tile()
+                guard let tv = documentView as? NSTextView else { return }
+                tv.minSize = NSSize(width: contentSize.width, height: contentSize.height)
+                if tv.frame.width < contentSize.width {
+                    tv.setFrameSize(NSSize(width: contentSize.width, height: contentSize.height))
+                }
+            }
         }
 
         func updateNSView(_: NSScrollView, context: Context) {

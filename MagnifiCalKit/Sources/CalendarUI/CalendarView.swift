@@ -138,7 +138,7 @@ public struct CalendarView: View {
         ic.onEditTrack = { te in engine.trackEditing = true; ui.editingTrack = te }
         // The keyboard state machine + the Cmd+K guide toggle. `onKey` reads
         // live engine/ui state each press; returns whether it consumed the key.
-        ic.onKey = { KeyboardModel(engine: engine, ui: ui).handle($0) }
+        ic.onKey = { KeyboardModel(engine: engine, ui: ui, dashNav: dashNav).handle($0) }
         ic.onKeyGuide = { ui.showKeyGuide = $0 }
         ic.isEditingText = { ui.drawerFieldEditing }
         ic.onSearch = { openSearch() }

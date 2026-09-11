@@ -247,6 +247,20 @@ public struct NativeDashPanel: View {
                 DispatchQueue.main.async { nav.rowsByPanel[pid] = displayRows }
             }
         }()
+        // Enter-to-edit handshake: adopt a pending edit request when this panel owns the row.
+        // Only the LIVE panel adopts (a daily todo shows in the week AND month panels — without
+        // the activePanel gate both would mount an editor); the re-check inside the hop makes
+        // adoption single-consumer even if two panels raced past the guard.
+        let _ = {
+            guard let nav, let req = nav.editRequest,
+                  nav.activePanel.isEmpty || nav.activePanel == scope + "|" + key,
+                  displayRows.contains(where: { Self.anchor($0) == req.anchor }) else { return }
+            DispatchQueue.main.async {
+                guard nav.editRequest == req else { return }
+                nav.editRequest = nil
+                editingRow = req.anchor
+            }
+        }()
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
@@ -516,11 +530,19 @@ public struct NativeDashPanel: View {
             editing: editingRow,
             endEdit: { t, rest in
                 if let rest {
-                    // Our own write: adopt the stamp so the frozen structure keeps the row in
-                    // place (the checkbox-toggle rule) while the live lookup restyles it.
-                    self.rewrite(t, adopt: true) { TodoIndex.replaceTodoRest($0, line: $1, rest: rest) }
+                    // ONE calendar-undo entry (⌘Z/⇧⌘Z restore the row's old text once the
+                    // editor is closed; while it's open the field's native undo owns ⌘Z).
+                    // adopt: the frozen structure keeps the row in place (the checkbox rule)
+                    // while the live lookup restyles it.
+                    engine.undoableEdit {
+                        self.rewrite(t, adopt: true) { TodoIndex.replaceTodoRest($0, line: $1, rest: rest) }
+                    }
                 }
                 self.editingRow = nil
+            },
+            select: { t, shift in
+                guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
+                nav?.select(Self.anchor(t), shift: shift)
             }
         )
         VStack(alignment: .leading, spacing: 5) {
@@ -668,10 +690,31 @@ public struct NativeDashPanel: View {
     private func toggle(_ t: ParsedTodo) {
         guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
 
-        Self.toggleTodo(engine, t)
+        // A checkbox click on a member of a MULTI-selection drives the whole selection to the
+        // clicked row's new state (check one → check all; uncheck likewise).
+        if let nav, nav.selected.count > 1, nav.selected.contains(Self.anchor(t)) {
+            Self.toggleSelected(engine, target: !t.done, anchors: nav.selected)
+        } else {
+            Self.toggleTodo(engine, t)
+        }
         // Our own write: adopt its data stamp so the frozen structure is NOT refrozen — the row
         // stays in place, animating; external changes still refreeze on their own stamps.
         frozen?.stamp = engine.todoDataStamp
+    }
+
+    /// Drive EVERY selected row to `target` — resolved from the current feed by anchor — as ONE
+    /// calendar-undo entry (a stray multi-check is a single ⌘Z away).
+    public static func toggleSelected(_ engine: CalendarEngine, target: Bool, anchors: Set<String>) {
+        guard !NativeDash.readOnly else { return } // the iPhone drawer never writes
+        let stamp = todayIso() + "T" + clockNow()
+        let todos = engine.todoFeed(today: todayIso()).filter { anchors.contains(anchor($0)) }
+        engine.undoableEdit {
+            for t in todos {
+                rewriteTodoLine(engine, t) {
+                    TodoIndex.toggleTodoLine($0, line: $1, checked: target, stamp: stamp)
+                }
+            }
+        }
     }
 
     private func openRow(_ t: ParsedTodo) {
@@ -962,17 +1005,20 @@ private struct TodoSubtree: View {
         let foldAndCenter: (ParsedTodo) -> Void
         let editing: String? // anchor of the row swapped for the inline editor (nil = none)
         let endEdit: (ParsedTodo, String?) -> Void // edited rest to commit, nil = cancel
+        let select: (ParsedTodo, Bool) -> Void // row click; Bool = shift held (toggle membership)
 
         init(today: String, ownNoteKey: String, theme: Theme, live: [String: ParsedTodo],
              nav: NativeDashNavModel?, frames: TodoRowFrameStore,
              toggle: @escaping (ParsedTodo) -> Void, open: @escaping (ParsedTodo) -> Void,
              fold: @escaping (ParsedTodo) -> Void, foldAndCenter: @escaping (ParsedTodo) -> Void,
-             editing: String? = nil, endEdit: @escaping (ParsedTodo, String?) -> Void = { _, _ in }) {
+             editing: String? = nil, endEdit: @escaping (ParsedTodo, String?) -> Void = { _, _ in },
+             select: @escaping (ParsedTodo, Bool) -> Void = { _, _ in }) {
             self.today = today; self.ownNoteKey = ownNoteKey; self.theme = theme
             self.live = live; self.nav = nav; self.frames = frames
             self.toggle = toggle; self.open = open; self.fold = fold
             self.foldAndCenter = foldAndCenter
             self.editing = editing; self.endEdit = endEdit
+            self.select = select
         }
     }
 
@@ -1032,10 +1078,13 @@ private struct TodoSubtree: View {
     /// The normal (non-editing) row: TodoRow + its frame report for the right-click layer.
     private func plainRow(_ t: ParsedTodo, focused: Bool) -> some View {
         TodoRow(todo: t, today: ctx.today, ownNoteKey: ctx.ownNoteKey, theme: ctx.theme,
-                focused: focused, foldable: node.item.foldable, folded: node.item.folded,
+                focused: focused,
+                selected: ctx.nav?.selected.contains(NativeDashPanel.anchor(t)) ?? false,
+                foldable: node.item.foldable, folded: node.item.folded,
                 hiddenSubs: node.item.hidden,
                 onToggle: { ctx.toggle(t) },
                 onOpen: { ctx.open(t) },
+                onSelect: { shift in ctx.select(t, shift) },
                 onFold: { ctx.fold(t) })
             .id(NativeDashPanel.anchor(t))
             // Layout-driven frame reporting for the right-click layer: the row's rect in
@@ -1057,16 +1106,19 @@ private struct TodoRow: View {
     var ownNoteKey: String = "" // the hosting panel's own scope-note key — its items drop the prefix
     let theme: Theme
     var focused: Bool = false // keyboard cursor here → dashed accent ring
+    var selected: Bool = false // clicked-selected → light accent wash over the row
     var foldable: Bool = false // has sub-items → trailing disclosure chevron
     var folded: Bool = false
     var hiddenSubs: Int = 0 // rows hidden under this folded parent ("+N sub")
     var onToggle: () -> Void
-    var onOpen: () -> Void
+    var onOpen: () -> Void // navigation (jump to source) — DOUBLE-click on macOS, tap on iOS
+    var onSelect: (Bool) -> Void = { _ in } // macOS single click; Bool = shift held
     var onFold: () -> Void = {}
 
     private static let followupTeal = Color(red: 0x4F / 255.0, green: 0xB0 / 255.0, blue: 0xB0 / 255.0)
 
     @State private var hovering = false
+    @State private var mouseDown = false // one select per press (the drag gesture streams changes)
     // The strike-through DRAWS/RETRACTS left-to-right (the web's character-progressive animation,
     // as a width-mask over a struck copy of the same text). Seeded to the settled state; animates
     // on every done flip.
@@ -1078,38 +1130,40 @@ private struct TodoRow: View {
             DashCheckbox(checked: todo.done, size: 15, action: onToggle)
                 .padding(.top, 2) // .cc-dtodo-check margin-top
                 .handCursor()
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 3) {
-                    // The pin prefix rides OUTSIDE the animated strikethrough text (PROJ's
-                    // rule). THIS panel's pin tag only — #pinned; #proj-pinned is the PROJ
-                    // panel's and shows no pin here.
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        if TodoFeed.isPinned(todo) {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(Theme.accent)
-                        }
-                        animatedTitle
-                    }
-                    metaRow
+            // macOS: MOUSE-DOWN selects (shift toggles membership) — a tap gesture would sit
+            // out the double-click disambiguation window and the wash would lag the click; the
+            // zero-distance drag fires the instant the button goes down. Double click (layered
+            // on top) navigates to the source, selecting on the way like any macOS list.
+            // iOS keeps the plain tap-to-navigate (the read-only drawer has no selection).
+            // The PROJ fix carries over: the Text is render-only — it otherwise claims the
+            // pointer over a clickable row (arrow cursor); the contentShape carries the
+            // clicks and the wrapper's handCursor/onHover own the pointer.
+            #if os(macOS)
+                rowContent
+                    .allowsHitTesting(false)
+                    .contentShape(Rectangle())
+                    .gesture(TapGesture(count: 2).onEnded { onOpen() })
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                guard !mouseDown else { return }
+                                mouseDown = true
+                                onSelect(NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false)
+                            }
+                            .onEnded { _ in mouseDown = false }
+                    )
+                    .handCursor()
+                    .onHover { hovering = $0 }
+            #else
+                Button(action: onOpen) {
+                    rowContent
+                        .allowsHitTesting(false)
+                        .contentShape(Rectangle())
                 }
-                // Hover wash on the TEXT REGION only (back to the web's .cc-dtodo-main:hover):
-                // a rounded accent-grey fill bled slightly past the content so layout never
-                // shifts. The title tint rides the same hover state.
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(hovering ? theme.accentGrey.opacity(0.14) : .clear)
-                        .padding(.horizontal, -6).padding(.vertical, -3)
-                )
-                // The PROJ fix: the Text is render-only — it otherwise claims the pointer over
-                // a clickable row (arrow cursor); the contentShape carries the clicks and the
-                // Button's handCursor/onHover own the pointer.
-                .allowsHitTesting(false)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .handCursor()
-            .onHover { hovering = $0 }
+                .buttonStyle(.plain)
+                .handCursor()
+                .onHover { hovering = $0 }
+            #endif
             if foldable {
                 Spacer(minLength: 4)
                 Button(action: onFold) {
@@ -1138,7 +1192,19 @@ private struct TodoRow: View {
             }
         }
         .padding(.vertical, 5) // roomier than the web row box, per taste
+        // Selected: the whole row's content (checkbox included) indents a step — the extra
+        // "this one is picked" cue — which also keeps the wash's LEFT edge inside the panel
+        // clip, so all four corners round (a negative left bleed lost the left pair).
+        .padding(.leading, selected ? 8 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Clicked-selected: a light accent wash over the WHOLE row; hovering a selected row
+        // DEEPENS this wash (the grey text-region hover is suppressed while selected).
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Theme.accent.opacity(selected ? (hovering ? 0.16 : 0.1) : 0))
+                .padding(.trailing, -4)
+        )
+        .animation(.easeOut(duration: 0.12), value: selected)
         // Keyboard cursor: the dashed accent ring around the whole row (the web's nav ring).
         .overlay(
             RoundedRectangle(cornerRadius: 6)
@@ -1148,6 +1214,33 @@ private struct TodoRow: View {
         )
         // Indentation is STRUCTURAL now (TodoSubtree nests children in padded wrappers whose
         // borders are the continuous guide lines) — the row itself carries no indent.
+    }
+
+    /// The row's text region: pin + title + meta, with the hover wash on the TEXT REGION only
+    /// (back to the web's .cc-dtodo-main:hover) — a rounded accent-grey fill bled slightly past
+    /// the content so layout never shifts. The title tint rides the same hover state.
+    private var rowContent: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            // The pin prefix rides OUTSIDE the animated strikethrough text (PROJ's rule).
+            // THIS panel's pin tag only — #pinned; #proj-pinned is the PROJ panel's and
+            // shows no pin here.
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                if TodoFeed.isPinned(todo) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                animatedTitle
+            }
+            metaRow
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                // Selected rows suppress the grey text-region hover — their hover feedback is
+                // the row wash deepening instead (two stacked washes read as a smudge).
+                .fill(hovering && !selected ? theme.accentGrey.opacity(0.14) : .clear)
+                .padding(.horizontal, -6).padding(.vertical, -3)
+        )
     }
 
     /// Two copies of the SAME wrapped text with COMPLEMENTARY left/right masks — the struck copy
@@ -1205,7 +1298,8 @@ private struct TodoRow: View {
     private func titleText(struck: Bool) -> Text {
         // The struck copy keeps FULL text color with a full-color strike — a pronounced line —
         // and the dimming comes from the single .opacity applied to the whole copy above.
-        let contentColor = struck ? theme.text : (hovering ? Theme.accent : theme.text)
+        // Selected rows keep the plain text color on hover (see rowContent's wash rule).
+        let contentColor = struck ? theme.text : (hovering && !selected ? Theme.accent : theme.text)
         let content = Text(todo.text)
             .strikethrough(struck, color: theme.text)
             .foregroundStyle(contentColor)

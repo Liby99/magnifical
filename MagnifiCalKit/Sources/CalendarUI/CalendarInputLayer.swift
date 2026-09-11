@@ -544,9 +544,13 @@ final class CatcherView: NSView, NSMenuItemValidation {
 
     /// What the current pinch drives. Decided ONCE at `.began` and latched: the inter-touch axis
     /// drifts as the fingers move, and flipping between view zoom and timeline scale mid-gesture
-    /// would be jarring (same latch idea as the day-view scroll's dayAxis).
+    /// would be jarring (same latch idea as the day-view scroll's dayAxis). `.undecided` is the
+    /// DAY-view deferral (engine.pinchDirectionDecides): no deeper view exists, so a pinch the
+    /// angle rule left to view zoom waits for its DIRECTION — out → timeline scale, in → zoom
+    /// out — latched from the first accumulated magnification and replayed into the handler.
     private var pinchTarget = PinchTarget.viewZoom
-    private enum PinchTarget { case viewZoom, tlScale }
+    private enum PinchTarget { case viewZoom, tlScale, undecided }
+    private var pinchAccum: CGFloat = 0 // magnification buffered while .undecided
 
     /// ── Raw trackpad touch tracking (the pinch axis) ─────────────────────────────────
     /// Axis of the current two-finger touch pair — degrees from the horizontal (90 = vertical),
@@ -581,17 +585,39 @@ final class CatcherView: NSView, NSMenuItemValidation {
         let ended = e.phase.contains(.ended) || e.phase.contains(.cancelled)
         if began {
             pinchTarget = .viewZoom
+            pinchAccum = 0
             if let deg = touchAxisDeg, engine?.pinchScalesTimeline(angleDeg: deg, at: point(e)) == true {
                 pinchTarget = .tlScale
+            } else if engine?.pinchDirectionDecides(at: point(e)) == true {
+                pinchTarget = .undecided // day view: the pinch DIRECTION picks the target
             }
         }
         if CCTrace.on {
             if began {
-                CCTrace.event("pinchBegan L\(engine?.chrome.level ?? -1)\(pinchTarget == .tlScale ? " tlScale" : "")")
+                CCTrace.event("pinchBegan L\(engine?.chrome.level ?? -1)\(pinchTarget == .tlScale ? " tlScale" : pinchTarget == .undecided ? " undecided" : "")")
             }
             if ended {
                 CCTrace.event("pinchEnded")
             }
+        }
+        if pinchTarget == .undecided {
+            pinchAccum += e.magnification
+            if ended { // released before any direction registered — nothing to drive
+                pinchTarget = .viewZoom
+                return
+            }
+            guard abs(pinchAccum) >= 0.004 else { return } // direction not yet legible
+            // Latch and REPLAY: the chosen handler gets a proper began (anchor setup), then the
+            // buffered magnification, so none of the gesture's travel is lost.
+            pinchTarget = pinchAccum > 0 ? .tlScale : .viewZoom
+            if pinchTarget == .tlScale {
+                engine?.onTimelineScale(delta: 0, at: point(e), began: true, ended: false)
+                engine?.onTimelineScale(delta: pinchAccum, at: point(e), began: false, ended: false)
+            } else {
+                engine?.onMagnify(delta: 0, at: point(e), began: true, ended: false)
+                engine?.onMagnify(delta: pinchAccum, at: point(e), began: false, ended: false)
+            }
+            return
         }
         if pinchTarget == .tlScale {
             engine?.onTimelineScale(delta: e.magnification, at: point(e), began: began, ended: ended)

@@ -1023,7 +1023,21 @@ public final class CalendarEngine {
         caches.editGen &+= 1
         items.events = s.events; items.bands = s.bands; items.deadlines = s.deadlines
         items.richById = s.rich; items.trackNames = s.trackNames; items.dailyNotes = s.dailyNotes
+        // The snapshot restores NOTES too (undoableEdit records TODO row rewrites) — bump the
+        // note generations or the dashboards would keep serving the pre-undo feed/preview.
+        caches.noteGen &+= 1
+        noteEdits.gen &+= 1
         selectedId = nil; schedulePersist()
+    }
+
+    /// Record `body`'s writes as ONE calendar-undo entry (a whole-state snapshot around the
+    /// block). Note writes are normally OUTSIDE the calendar stack — a focused editor owns its
+    /// own field-local undo (see setNotes) — but ONE-SHOT rewrites with no field to own them
+    /// (the TODO row editor's commit, batch checkbox toggles) opt in through this.
+    public func undoableEdit(_ body: () -> Void) {
+        beginTxn()
+        body()
+        commitTxn()
     }
 
     public var canUndo: Bool {

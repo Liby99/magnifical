@@ -144,6 +144,7 @@ enum AppKeyState: Equatable {
 @MainActor struct KeyboardModel {
     let engine: CalendarEngine
     let ui: CalendarUIState
+    var dashNav: NativeDashNavModel? = nil // TODO-panel mouse selection (Enter-to-edit fallback)
 
     var state: AppKeyState {
         if engine.timedEditing {
@@ -499,6 +500,13 @@ enum AppKeyState: Equatable {
     @discardableResult func handle(_ token: KeyToken) -> Bool {
         for b in bindings() where b.token == token {
             b.action(); return true
+        }
+        // Fallback (after the state table, so a selected event's Enter etc. always wins):
+        // Enter with exactly ONE clicked-selected TODO row → the inline row editor. The live
+        // panel adopts the request (see NativeDashPanel's edit-request handshake).
+        if token == .enter, let nav = dashNav, nav.selected.count == 1, let a = nav.selected.first {
+            nav.requestEdit(a)
+            return true
         }
         return false
     }

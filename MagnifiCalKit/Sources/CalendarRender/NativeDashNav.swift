@@ -42,6 +42,40 @@ import Observation
     public var noteFocusSeq = 0
     @ObservationIgnored private var jumpSeq = 0
 
+    // ── Mouse selection (macOS TODO panel) ─────────────────────────────────────────────
+    /// Clicked-selected rows by soft-link anchor: single click replaces the set, shift+click
+    /// toggles membership. A checkbox click on a member of a MULTI-selection drives every
+    /// selected row to the clicked row's new state; Enter with exactly ONE selection opens
+    /// the inline row editor (via `editRequest`).
+    public var selected: Set<String> = []
+
+    public func select(_ anchor: String, shift: Bool) {
+        if shift {
+            if selected.contains(anchor) {
+                selected.remove(anchor)
+            } else {
+                selected.insert(anchor)
+            }
+        } else {
+            selected = [anchor]
+        }
+    }
+
+    /// Enter-to-edit handshake: the keyboard layer posts the anchor; the live panel that owns
+    /// the row adopts it into its editing state and clears the request (seq uniquifies repeats).
+    public struct EditRequest: Equatable {
+        public var anchor: String
+        public var seq: Int
+    }
+
+    public var editRequest: EditRequest?
+    @ObservationIgnored private var editSeq = 0
+
+    public func requestEdit(_ anchor: String) {
+        editSeq += 1
+        editRequest = EditRequest(anchor: anchor, seq: editSeq)
+    }
+
     public func requestNoteJump(key: String, line: Int) {
         jumpSeq += 1
         noteJump = NoteJumpRequest(key: key, line: line, seq: jumpSeq)

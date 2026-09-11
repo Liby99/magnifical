@@ -594,6 +594,16 @@ extension CalendarEngine {
         return tl.zoomable && tl.hourH > 0 && p.y > tl.tlTop && p.y < tl.tlBottom
     }
 
+    /// DAY view over the timeline: there is no deeper view to zoom into, so a pinch that the
+    /// angle rule would send to VIEW zoom instead defers to the pinch DIRECTION — pinching OUT
+    /// (a zoom-in attempt) scales the timeline at ANY angle; pinching IN still zooms out to
+    /// week. The catcher latches the target from the first accumulated magnification.
+    public func pinchDirectionDecides(at p: CGPoint) -> Bool {
+        guard level(z) >= 3, !inDayDashboard(p) else { return false }
+        let tl = timelineInfo(snapshot())
+        return tl.zoomable && tl.hourH > 0 && p.y > tl.tlTop && p.y < tl.tlBottom
+    }
+
     /// Scale the timeline under a vertical pinch: exponential in the accumulated magnification
     /// (so pinch-in and pinch-out are symmetric, same reason pinchDelta uses the log), holding
     /// the hour under the fingers fixed at the pointer's y. This drives the SAME `weekHourH` the
