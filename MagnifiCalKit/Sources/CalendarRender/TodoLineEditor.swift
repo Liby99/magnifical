@@ -78,6 +78,7 @@
             tv.sizeToFit()
             context.coordinator.textView = tv
             context.coordinator.restyle()
+            context.coordinator.installClickAway()
 
             let sv = LineClipScrollView()
             sv.documentView = tv
@@ -136,9 +137,35 @@
             var parent: TodoLineEditor
             weak var textView: FieldView?
             private var finished = false // onFinish fires exactly once (Esc also blurs)
+            private var clickMonitor: Any?
 
             init(_ parent: TodoLineEditor) {
                 self.parent = parent
+            }
+
+            /// Click-away commit: focus alone can't close the editor (clicking empty SwiftUI
+            /// space moves focus nowhere, so the text view never blurs) — a local monitor
+            /// commits on any mouse-down in the window OUTSIDE the editor's own box. The event
+            /// always passes through, so the click still selects rows / toggles checkboxes /
+            /// opens callouts against the post-commit tree.
+            func installClickAway() {
+                clickMonitor = NSEvent.addLocalMonitorForEvents(
+                    matching: [.leftMouseDown, .rightMouseDown]
+                ) { [weak self] e in
+                    guard let self, let tv = self.textView, let sv = tv.enclosingScrollView,
+                          e.window === sv.window else { return e }
+                    let p = sv.convert(e.locationInWindow, from: nil)
+                    if !sv.bounds.contains(p) {
+                        self.finish(cancel: false)
+                    }
+                    return e
+                }
+            }
+
+            deinit {
+                if let m = clickMonitor {
+                    NSEvent.removeMonitor(m)
+                }
             }
 
             func textDidChange(_: Notification) {

@@ -1289,6 +1289,22 @@ public struct CalendarView: View {
                 }
         }
         ToolbarSpacerCompat(.fixed)
+        // The pinned weekly/monthly dashboard toggle — ⌘B's button form, the sidebar glyph
+        // (hollow window + filled right half). Only at month/week zoom: day view forces the
+        // panel out and year has none (toggleDashPin's own guard mirrors this). chrome is the
+        // navigation-time observable, so the button appears/disappears on real level changes,
+        // not per frame.
+        if engine.chrome.level == 1 || engine.chrome.level == 2 {
+            ToolbarItem(placement: .primaryAction) {
+                Button { engine.toggleDashPin() } label: {
+                    Image(systemName: "rectangle.righthalf.inset.filled")
+                        .foregroundStyle(engine.chrome.dashPinned ? Theme.accent : Color.primary)
+                }
+                .glassButtonStyleCompat().buttonBorderShape(.circle)
+                .help(engine.chrome.dashPinned ? "Hide Dashboard (⌘B)" : "Show Dashboard (⌘B)")
+            }
+            ToolbarSpacerCompat(.fixed)
+        }
         ToolbarItem(placement: .primaryAction) {
             Button { engine.goToToday() } label: { Text("Today") }
                 .glassButtonStyleCompat().buttonBorderShape(.capsule)
