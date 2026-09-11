@@ -285,11 +285,14 @@ private struct DeadlinePill: View {
         .opacity(Double((1 - morph) * (1 - morph))) // content fades early in the shrink
         .padding(.horizontal, 7).padding(.vertical, 3)
         .frame(width: width, height: height, alignment: .leading)
-        // Opaque base UNDER the frosted glass (like the event stickers) so the label reads as a solid
-        // frosted pill in front of the timeline, not a translucent tint you can see through.
+        // Opaque base UNDER the frosted glass (like the event stickers) so the label reads as a
+        // solid frosted pill in front of the timeline at REST — but glass over an opaque plate
+        // has nothing to frost (EventSurface's lesson), so on ACTIVATION (hover/selection) the
+        // base fades away and the established glass frosts the actual timeline behind, exactly
+        // like hovered event/band stickers.
         .background {
             ZStack {
-                shape.fill(theme.bg) // occludes the timeline behind → the frost reads solid
+                GlassRevealBase(shape: shape, active: activation.isActive, theme: theme)
                 Color.clear.glassEffectCompat(.regular.tint(color.opacity(activation.tint * theme.eventTintScale)), in: shape)
             }
         }
@@ -315,6 +318,40 @@ private struct DeadlinePill: View {
     }
 }
 
+/// A pill's opaque base: solid at rest (the label reads as a solid frosted pill in front of
+/// the timeline), FADING AWAY once activation establishes the glass — so a hovered/selected
+/// label frosts what's beneath, like hovered event stickers. Mirrors EventSurface's fade:
+/// mount solid, fade under the glass after a short delay, and snap back the instant the
+/// activation ends (no flash — the glass layer above never unmounts).
+private struct GlassRevealBase<S: Shape>: View {
+    let shape: S
+    let active: Bool
+    let theme: Theme
+    @State private var glassed = false // glass established → the base has faded away
+
+    var body: some View {
+        shape.fill(theme.bg)
+            .opacity(!active || !glassed ? 1 : 0)
+            .onAppear {
+                if active {
+                    fadeOut()
+                }
+            }
+            .onChange(of: active) { _, a in
+                if a {
+                    fadeOut()
+                } else {
+                    glassed = false // base back on this same frame — un-hover never flashes
+                }
+            }
+    }
+
+    /// The short delay keeps the base solid over the first frames while the glass forms.
+    private func fadeOut() {
+        withAnimation(.easeOut(duration: 0.3).delay(0.05)) { glassed = true }
+    }
+}
+
 /// The edge indicator's EMPTY label: the deadline pill's exact chrome (glass base, rounded
 /// corners, side border + caret pointing into the line) at a fixed mini size — no title, no
 /// time, no activation styling (the indicator is render-only).
@@ -330,7 +367,8 @@ private struct MiniDeadlinePill: View {
         // (the pointing-hand cursor comes from the engine's cursorHint, like the edge stacks).
         let tint = (hovering ? EventActivation.hover.tint : EventActivation.plain.tint) * theme.eventTintScale
         ZStack {
-            shape.fill(theme.bg) // occlude the timeline behind, like the full pill
+            // Solid at rest, fading under the glass on hover — the full pill's treatment.
+            GlassRevealBase(shape: shape, active: hovering, theme: theme)
             Color.clear.glassEffectCompat(.regular.tint(color.opacity(tint)), in: shape)
         }
         .overlay {
