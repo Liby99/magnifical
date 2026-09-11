@@ -268,8 +268,40 @@ public struct NativeProjPanel: View {
         let next = TodoIndex.appendProjectTodo(note: engine.dailyNote(storageKey),
                                                project: project, todo: todo, stamp: stamp)
         engine.setDailyNote(storageKey, next)
-        engine.todoFeedRefreshNow(today: NativeDashPanel.todayIso())
+        let today = NativeDashPanel.todayIso()
+        engine.todoFeedRefreshNow(today: today)
+        // Our own write: ADOPT it into the frozen structure (the toggle pattern) instead of
+        // letting the stamp change refreeze — a refreeze re-scores every project and SHUFFLES
+        // the page under the cursor, tearing the user away from the chart they're adding to.
+        // Adopting alone would HIDE the new row (membership is frozen too), so the fresh
+        // anchors are SPLICED onto the edited project's membership — prepended, which also
+        // keeps the quick-add's "appears on top" guarantee.
+        if var f = frozen, f.basis == "\(scope)|\(key)" {
+            let (rs, re) = range
+            let feed = ProjIndex.shown(engine.projFeed(today: today), rs: rs, re: re)
+            if let p = feed.first(where: { $0.key == project }) {
+                f.order = Self.splicing(f.order, project: project,
+                                        anchors: p.tasks.map { NativeDashPanel.anchor($0.todo) })
+            }
+            f.stamp = engine.todoDataStamp
+            frozen = f
+        }
         engine.wake() // repaint now — the paused render clock won't (see NativeNotePanel)
+    }
+
+    /// Splice a self-edit's fresh rows into the FROZEN order without touching any project's
+    /// slot: `anchors` is the edited project's LIVE membership; anchors the frozen structure
+    /// doesn't know yet are prepended to that project's ranked list (everything else is
+    /// untouched, so the page's project ordering cannot move).
+    static func splicing(_ order: [(key: String, ranked: [String])], project: String,
+                         anchors: [String]) -> [(key: String, ranked: [String])] {
+        guard let i = order.firstIndex(where: { $0.key == project }) else { return order }
+        let known = Set(order[i].ranked)
+        let fresh = anchors.filter { !known.contains($0) }
+        guard !fresh.isEmpty else { return order }
+        var out = order
+        out[i].ranked.insert(contentsOf: fresh, at: 0)
+        return out
     }
 }
 

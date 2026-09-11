@@ -302,6 +302,10 @@ public struct NativeDashPanel: View {
                 let t = live[Self.anchor(todo)] ?? todo
                 onRowMenu(TodoRowMenuRequest(todo: t, done: t.done, pinTag: "pinned",
                                              windowPoint: windowPoint, actions: rowMenuActions()))
+            }, onAway: {
+                if let nav, !nav.selected.isEmpty {
+                    nav.selected.removeAll()
+                }
             }))
         #endif
             // Right-click anywhere OUTSIDE a row = the cog's layering menu (single-sourced from
@@ -328,9 +332,14 @@ public struct NativeDashPanel: View {
     private func rowMenuActions() -> TodoRowMenuActions {
         var a = TodoRowMenuActions()
         a.toggle = { t in toggle(t) }
-        // Edit: swap the row for the inline markdown line editor (macOS right-click only, so
-        // the read-only phone never reaches it). Commit rewrites the rest of the source line.
-        a.edit = { t in editingRow = Self.anchor(t) }
+        // Edit: swap the row's text for the inline markdown line editor (macOS right-click
+        // only, so the read-only phone never reaches it). Editing implies SELECTED — the row
+        // keeps its wash/bar during the edit and stays selected after the commit.
+        a.edit = { t in
+            editingRow = Self.anchor(t)
+            nav?.selected = [Self.anchor(t)]
+            engine.deselectAll() // exclusive selection systems (see the select closure)
+        }
         a.openTodo = { t in openRow(t) }
         a.setColor = { t, c in rewrite(t, adopt: true) { TodoIndex.setColorToken($0, line: $1, color: c) } }
         // Pin/Unpin do NOT adopt: the movement into/out of the Pinned section IS the feedback
@@ -543,6 +552,10 @@ public struct NativeDashPanel: View {
             select: { t, shift in
                 guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
                 nav?.select(Self.anchor(t), shift: shift)
+                // The two selection systems are EXCLUSIVE: picking a TODO row drops the
+                // calendar's item selection (and a canvas click drops this one), so Enter
+                // always speaks to exactly one of them.
+                engine.deselectAll()
             }
         )
         VStack(alignment: .leading, spacing: 5) {
@@ -719,6 +732,9 @@ public struct NativeDashPanel: View {
 
     private func openRow(_ t: ParsedTodo) {
         guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
+        // Navigating to the source moves the interaction INTO the calendar/drawer system —
+        // the TODO selection ends here (the exclusive-systems rule).
+        nav?.selected.removeAll()
         if t.source == "event" {
             // Opens the event drawer landing in the note editor AT this row's source line —
             // in the occurrence note when the todo lives there (the web's data-open flow).
@@ -823,6 +839,7 @@ private struct RowFrameReporter: View {
     private struct DashRightClickLayer: NSViewRepresentable {
         let frames: TodoRowFrameStore
         var onHit: (ParsedTodo, CGPoint) -> Void // (row's todo, click in WINDOW coords)
+        var onAway: () -> Void = {} // left click inside the panel that hits NO row → deselect
 
         func makeNSView(context _: Context) -> Layer {
             let v = Layer()
@@ -837,11 +854,13 @@ private struct RowFrameReporter: View {
         private func apply(to v: Layer) {
             v.frames = frames
             v.onHit = onHit
+            v.onAway = onAway
         }
 
         final class Layer: NSView {
             var frames: TodoRowFrameStore?
             var onHit: ((ParsedTodo, CGPoint) -> Void)?
+            var onAway: (() -> Void)?
 
             override var isFlipped: Bool {
                 true
@@ -876,14 +895,25 @@ private struct RowFrameReporter: View {
                         rightClickMonitor = nil
                     }
                 } else if rightClickMonitor == nil {
-                    rightClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) {
-                        [weak self] e in
-                        guard let self, e.window === self.window, self.effectivelyVisible else { return e }
-                        let p = self.convert(e.locationInWindow, from: nil)
-                        guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
-                        self.onHit?(todo, e.locationInWindow)
-                        return nil // consumed — no pass-through context menus underneath
-                    }
+                    rightClickMonitor = NSEvent
+                        .addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) {
+                            [weak self] e in
+                            guard let self, e.window === self.window, self.effectivelyVisible else { return e }
+                            let p = self.convert(e.locationInWindow, from: nil)
+                            if e.type == .leftMouseDown {
+                                // Click-away: a left click INSIDE the panel that lands on no row
+                                // clears the selection. Row clicks (checkbox included — its rect
+                                // is part of the row frame) never fire this; clicks outside the
+                                // panel are the canvas catcher's business. Always passes through.
+                                if self.bounds.contains(p), self.frames?.hit(p) == nil {
+                                    self.onAway?()
+                                }
+                                return e
+                            }
+                            guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
+                            self.onHit?(todo, e.locationInWindow)
+                            return nil // consumed — no pass-through context menus underneath
+                        }
                 }
             }
 
@@ -1034,10 +1064,13 @@ private struct TodoSubtree: View {
         } ?? false
         VStack(alignment: .leading, spacing: 0) {
             #if os(macOS)
-                // Right-click ▸ Edit swapped this row for the inline markdown line editor —
-                // the row's content becomes the full-row input box until commit/cancel.
+                // Right-click ▸ Edit (or Enter on a single selection) swapped this row's TEXT
+                // for the inline line editor — checkbox and the selected dressing stay put.
                 if ctx.editing == NativeDashPanel.anchor(t) {
-                    TodoRowEditor(todo: t, theme: ctx.theme) { ctx.endEdit(t, $0) }
+                    TodoEditingRow(todo: t, anchor: NativeDashPanel.anchor(t), theme: ctx.theme,
+                                   frames: ctx.frames,
+                                   onToggle: { ctx.toggle(t) },
+                                   onFinish: { ctx.endEdit(t, $0) })
                         .id(NativeDashPanel.anchor(t))
                 } else {
                     plainRow(t, focused: focused)
@@ -1094,6 +1127,58 @@ private struct TodoSubtree: View {
     }
 }
 
+/// The selected-row dressing shared by TodoRow and the editing row: a content-hugging accent
+/// wash with the left accent capsule (the event box's selected-bar language). `active: false`
+/// keeps a transparent stand-in so the selection animation has a stable shape to fade.
+private struct TodoSelectionWash: View {
+    let active: Bool
+    var deepened = false // hovered while selected → the wash darkens a step
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Theme.accent.opacity(active ? (deepened ? 0.16 : 0.1) : 0))
+            if active {
+                Capsule()
+                    .fill(Theme.accent.opacity(0.75))
+                    .frame(width: 3)
+                    .padding(.vertical, 3)
+                    .padding(.leading, 3)
+            }
+        }
+        .padding(.vertical, -4) // breathe past the text block, like the hover wash
+        .padding(.trailing, -10) // right breathing room, matching the leading indent's weight
+    }
+}
+
+#if os(macOS)
+    /// The row while its text is being edited: the checkbox stays live on the left, the inline
+    /// editor takes the text region, and the SELECTED dressing (wash + bar + indent) rides
+    /// behind both — editing reads as "selected, with the text swapped for a field". Reports
+    /// its frame like a normal row, so a click INTO the editor is a row click (no deselect).
+    private struct TodoEditingRow: View {
+        let todo: ParsedTodo
+        let anchor: String
+        let theme: Theme
+        let frames: TodoRowFrameStore
+        let onToggle: () -> Void
+        let onFinish: (String?) -> Void
+
+        var body: some View {
+            HStack(alignment: .top, spacing: 12) {
+                DashCheckbox(checked: todo.done, size: 15, action: onToggle)
+                    .padding(.top, 9) // centered on the editor box (4 slot + (25 − 15) / 2)
+                    .handCursor()
+                TodoRowEditor(todo: todo, theme: theme, onFinish: onFinish)
+            }
+            .padding(.leading, 14) // the selected indent — clear of the accent bar, like TodoRow
+            .background(TodoSelectionWash(active: true))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RowFrameReporter(anchor: anchor, todo: todo, frames: frames))
+        }
+    }
+#endif
+
 /// One todo row — a faithful port of the webview's .cc-dtodo styling: 15px rounded checkbox,
 /// 13px title (prefix + content as inline segments of ONE wrapped text; accent-grey prefix,
 /// accent-grey + strike when done), then the 11px meta row — priority bangs (mono-heavy red;
@@ -1126,6 +1211,53 @@ private struct TodoRow: View {
     @State private var sweeping = false // strike sweep IN FLIGHT → the masked pair is mounted
 
     var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            selectionCluster
+            if foldable {
+                Spacer(minLength: 4)
+                Button(action: onFold) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .rotationEffect(.degrees(folded ? 0 : 90))
+                        .foregroundStyle(theme.accentGrey)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .handCursor()
+                .help("Fold / unfold sub-items")
+            }
+        }
+        .onChange(of: todo.done, initial: true) { _, done in
+            if strike < 0 {
+                strike = done ? 1 : 0 // first render: settled, no animation
+            } else {
+                sweeping = true // mount the masked pair for the sweep, drop it after
+                withAnimation(.easeInOut(duration: 0.26)) {
+                    strike = done ? 1 : 0
+                } completion: {
+                    sweeping = false
+                }
+            }
+        }
+        .padding(.vertical, 5) // roomier than the web row box, per taste
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Keyboard cursor: the dashed accent ring around the whole row (the web's nav ring).
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Theme.accent.opacity(focused ? 0.8 : 0),
+                              style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .padding(.horizontal, -4)
+        )
+        // Indentation is STRUCTURAL now (TodoSubtree nests children in padded wrappers whose
+        // borders are the continuous guide lines) — the row itself carries no indent.
+    }
+
+    /// Checkbox + text region with the selection dressing hugging THIS cluster (not the full
+    /// row): the light accent wash sizes to the content, and a left accent capsule — the event
+    /// box's selected-bar language (BandStyle.accentWidthSelected) — marks the picked row. The
+    /// selected content indents to sit clear of the bar (bar 3 + insets + the event barTextGap).
+    private var selectionCluster: some View {
         HStack(alignment: .top, spacing: 12) {
             DashCheckbox(checked: todo.done, size: 15, action: onToggle)
                 .padding(.top, 2) // .cc-dtodo-check margin-top
@@ -1164,56 +1296,18 @@ private struct TodoRow: View {
                 .handCursor()
                 .onHover { hovering = $0 }
             #endif
-            if foldable {
-                Spacer(minLength: 4)
-                Button(action: onFold) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .rotationEffect(.degrees(folded ? 0 : 90))
-                        .foregroundStyle(theme.accentGrey)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .handCursor()
-                .help("Fold / unfold sub-items")
-            }
         }
-        .onChange(of: todo.done, initial: true) { _, done in
-            if strike < 0 {
-                strike = done ? 1 : 0 // first render: settled, no animation
-            } else {
-                sweeping = true // mount the masked pair for the sweep, drop it after
-                withAnimation(.easeInOut(duration: 0.26)) {
-                    strike = done ? 1 : 0
-                } completion: {
-                    sweeping = false
-                }
-            }
-        }
-        .padding(.vertical, 5) // roomier than the web row box, per taste
-        // Selected: the whole row's content (checkbox included) indents a step — the extra
-        // "this one is picked" cue — which also keeps the wash's LEFT edge inside the panel
-        // clip, so all four corners round (a negative left bleed lost the left pair).
-        .padding(.leading, selected ? 8 : 0)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Clicked-selected: a light accent wash over the WHOLE row; hovering a selected row
-        // DEEPENS this wash (the grey text-region hover is suppressed while selected).
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Theme.accent.opacity(selected ? (hovering ? 0.16 : 0.1) : 0))
-                .padding(.trailing, -4)
-        )
+        // The selected content steps right to sit clear of the accent bar; the wash (sized to
+        // this cluster, all four corners rounded) rides behind. Hovering a selected row DEEPENS
+        // the wash (the grey text-region hover is suppressed while selected).
+        .padding(.leading, selected ? 14 : 0)
+        .background(selectionWash)
         .animation(.easeOut(duration: 0.12), value: selected)
-        // Keyboard cursor: the dashed accent ring around the whole row (the web's nav ring).
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(Theme.accent.opacity(focused ? 0.8 : 0),
-                              style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                .padding(.horizontal, -4)
-        )
-        // Indentation is STRUCTURAL now (TodoSubtree nests children in padded wrappers whose
-        // borders are the continuous guide lines) — the row itself carries no indent.
+    }
+
+    /// The selection dressing: content-hugging accent wash + the left accent capsule.
+    private var selectionWash: some View {
+        TodoSelectionWash(active: selected, deepened: hovering)
     }
 
     /// The row's text region: pin + title + meta, with the hover wash on the TEXT REGION only

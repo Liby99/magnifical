@@ -498,15 +498,17 @@ enum AppKeyState: Equatable {
     /// Run the binding for `token` if the current state has one. Returns whether it was handled (so the
     /// catcher can consume the event; unhandled keys fall through to the existing behavior / native field).
     @discardableResult func handle(_ token: KeyToken) -> Bool {
-        for b in bindings() where b.token == token {
-            b.action(); return true
-        }
-        // Fallback (after the state table, so a selected event's Enter etc. always wins):
-        // Enter with exactly ONE clicked-selected TODO row → the inline row editor. The live
-        // panel adopts the request (see NativeDashPanel's edit-request handshake).
+        // The TODO panel's mouse selection is its own interaction system, EXCLUSIVE with the
+        // calendar's (selecting a row deselects the calendar item and vice versa) — so while
+        // exactly ONE row is selected, Enter belongs to it: the inline row editor, never the
+        // calendar's rename/select. The live panel adopts the request (the edit handshake).
+        // Every other key still flows to the state table.
         if token == .enter, let nav = dashNav, nav.selected.count == 1, let a = nav.selected.first {
             nav.requestEdit(a)
             return true
+        }
+        for b in bindings() where b.token == token {
+            b.action(); return true
         }
         return false
     }

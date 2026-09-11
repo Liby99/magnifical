@@ -17,6 +17,7 @@ struct InputCatcher: NSViewRepresentable {
     let dayBridge: DayPagerBridge
     var forwarder: CatcherHandle?
     var onOpenEvent: (String) -> Void = { _ in }
+    var onCanvasClick: () -> Void = {} // left click on the canvas → deselect TODO rows
     var onEventMenu: (String, CGRect) -> Void = { _, _ in } // right-click event → context callout
     var onSpaceMenu: (CalendarEngine.EmptySpot, CGRect) -> Void = { _, _ in
     } // right-click empty space → create/paste callout
@@ -45,6 +46,7 @@ struct InputCatcher: NSViewRepresentable {
         v.weekBridge = weekBridge
         v.dayBridge = dayBridge
         v.onOpenEvent = onOpenEvent
+        v.onCanvasClick = onCanvasClick
         v.onEventMenu = onEventMenu
         v.onSpaceMenu = onSpaceMenu
         v.onEditTrack = onEditTrack
@@ -72,6 +74,7 @@ struct InputCatcher: NSViewRepresentable {
         v.engine = engine; v.monthBridge = monthBridge; v.weekBridge = weekBridge; v.dayBridge = dayBridge
         v.onOpenEvent = onOpenEvent; v.onEventMenu = onEventMenu; v.onSpaceMenu = onSpaceMenu; v
             .onEditTrack = onEditTrack
+        v.onCanvasClick = onCanvasClick
         v.onKey = onKey; v.onKeyGuide = onKeyGuide; v.isEditingText = isEditingText; v.onSearch = onSearch
         v.isModalDelete = isModalDelete; v.onDeleteDialogKey = onDeleteDialogKey; v.onRequestDelete = onRequestDelete
         v.isTutorialUp = isTutorialUp; v.onTutorialKey = onTutorialKey
@@ -117,6 +120,7 @@ enum DeleteDialogKey { case left, right, confirm, cancel }
 final class CatcherView: NSView, NSMenuItemValidation {
     weak var engine: CalendarEngine?
     var onOpenEvent: ((String) -> Void)?
+    var onCanvasClick: (() -> Void)? // any left click on the calendar canvas (deselect TODO rows)
     var onEventMenu: ((String, CGRect) -> Void)? // right-click on an event → context callout (id, view-space box rect)
     var onSpaceMenu: ((CalendarEngine.EmptySpot, CGRect) -> Void)? // right-click on empty space → create/paste callout
     var onEditTrack: ((TrackEdit) -> Void)?
@@ -687,6 +691,9 @@ final class CatcherView: NSView, NSMenuItemValidation {
         if engine?.inDayDashboard(p) == true {
             return
         }
+        // A click on the CALENDAR clears the dashboard TODO row selection (clicks inside a
+        // panel are the panel's own click-away layer's business — see DashRightClickLayer).
+        onCanvasClick?()
         // Track-name edit: a click just commits/dismisses it (swallowed — no zoom).
         if engine?.trackEditing == true {
             window?.makeFirstResponder(self)

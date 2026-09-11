@@ -129,6 +129,13 @@ public struct CalendarView: View {
                               weekBridge: weekBridge, dayBridge: dayBridge)
         ic.forwarder = catcherHandle
         ic.onOpenEvent = { ui.openEventId = $0 }
+        // Any calendar-canvas click clears the TODO row selection (the panels clear their own
+        // empty-space clicks via DashRightClickLayer; tab switches clear in onChange(dashTab)).
+        ic.onCanvasClick = { [dashNav] in
+            if !dashNav.selected.isEmpty {
+                dashNav.selected.removeAll()
+            }
+        }
         ic.onEventMenu = { (id: String, anchor: CGRect) in
             ui.eventMenu = CalendarUIState.EventMenuTarget(id: id, anchor: anchor)
         }
@@ -1137,7 +1144,10 @@ public struct CalendarView: View {
                     // The dashboard tab/mode toggles are SwiftUI overlays (not routed through the engine), and
                     // their transition animates via the timeline's CarouselDriver — so wake the render loop when
                     // they change, else the switch would freeze while the calendar is idle.
-                    .onChange(of: dashTab) { _, _ in engine.wake() }
+                    .onChange(of: dashTab) { _, _ in
+                        engine.wake()
+                        dashNav.selected.removeAll() // leaving TODO (or re-entering) drops the selection
+                    }
                     .onChange(of: noteMode) { _, _ in engine.wake() }
                     // Apple Calendar import: pull on first appearance, whenever the app returns to the foreground
                     // (auto-refresh), and when the Settings window changes the connection.
