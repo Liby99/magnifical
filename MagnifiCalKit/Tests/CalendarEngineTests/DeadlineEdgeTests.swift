@@ -79,6 +79,30 @@ final class DeadlineEdgeTests: XCTestCase {
         XCTAssertEqual(tween.to, expected, accuracy: 0.5, "the deadline lands mid-viewport")
     }
 
+    func testEdgePillBeatsOverlappingEventEdgeStack() throws {
+        // Day 2's pill sits LEFT of its column — over day 1. Give day 1 an early timed event
+        // that's also scrolled out the top: its edge card's click band covers that column at
+        // tlTop, exactly under the pill. The pill must win (center the DEADLINE), not the stack.
+        let (e, id) = makeEngine()
+        _ = e.createTimedEvent(year: e.year, month: 6, day: 1, startHour: 3, endHour: 5,
+                               title: "Early", color: "blue")
+        e.demoScrollTimelineToHour(14)
+        let g = e.snapshotInput()
+        let d = try XCTUnwrap(e.viewDeadlines().first { $0.id == id })
+        let lab = try XCTUnwrap(deadlineEdgeLabel(d, g))
+        let p = CGPoint(x: lab.rect.midX, y: lab.rect.midY)
+        XCTAssertNotNil(e.edgeIndicatorTarget(at: p, g),
+                        "precondition: the pill genuinely overlaps the neighbor's edge stack")
+        e.onPointerDown(at: p)
+        e.onPointerUp(at: p)
+        let tween = try XCTUnwrap(e.anim.tlScrollTween)
+        let tl = timelineInfo(g)
+        let halfSpan = (tl.tlBottom - tl.tlTop) / tl.hourH / 2
+        let expected = max(0, min(tl.maxScroll, (d.hour - halfSpan) * tl.hourH))
+        XCTAssertEqual(tween.to, expected, accuracy: 0.5,
+                       "the click centers the DEADLINE, not the overlapped event")
+    }
+
     func testCulledColumnHasNoIndicatorEither() throws {
         // Day 15 is off the settled week window entirely (column culled) — neither the line
         // nor an edge indicator should render for it.

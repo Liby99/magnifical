@@ -42,22 +42,25 @@ extension CalendarEngine {
                         origBand: items.bands.first { $0.id == hit.id }, priorSelection: prior)
             return
         }
-        // 1b. edge-indicator stack (pinned at the timeline's top/bottom edge): a click glides the
-        //     timeline so that edge's nearest off-viewport event is revealed. Checked before the
-        //     events — the stack draws above them — and no drag is primed (it's scroll chrome).
-        if z >= 1.5, let t = edgeIndicatorTarget(at: p, g) {
-            revealEdgeIndicatorTarget(t)
-            return
-        }
-        // 1c. the now-line's edge "now" tag: a click glides the timeline to CENTER the current
-        //     time. Same scroll chrome as the stacks — no selection, no drag.
+        // 1b–1d: edge scroll-chrome, PRIORITY ORDER now tag > deadline pill > event stacks —
+        //        the tags sit beside the columns and can overlap a neighbor column's stack (or
+        //        events); a click on a tag must center ITS time, never the overlapped event's.
+        // 1b. the now-line's edge "now" tag: a click glides the timeline to CENTER the current
+        //     time. No selection, no drag — it's scroll chrome.
         if z >= 0.5, nowEdgeTagHit(at: p, g) {
             revealNowLine()
             return
         }
-        // 1d. a deadline's edge mini pill: same treatment — glide to center that deadline's hour.
+        // 1c. a deadline's edge mini pill: same treatment — glide to center that deadline's hour.
         if z >= 0.5, let d = deadlineEdgeTagAt(p, g) {
             scrollTimelineToCenter(hour: d.hour)
+            return
+        }
+        // 1d. edge-indicator stack (pinned at the timeline's top/bottom edge): a click glides the
+        //     timeline so that edge's nearest off-viewport event is revealed. Checked before the
+        //     events — the stack draws above them.
+        if z >= 1.5, let t = edgeIndicatorTarget(at: p, g) {
+            revealEdgeIndicatorTarget(t)
             return
         }
         // 2. timed events (on the timeline)
@@ -304,10 +307,20 @@ extension CalendarEngine {
             let c = cellInWeek(p.x, p.y, g)
             hv.dom = c.dom; hv.hour = c.hour; hv.hourFrac = c.hourFrac; hv.nearLeft = c.nearLeft
         }
+        // The edge now/deadline tags own the pointer over their rects — checked BEFORE the hover
+        // stickiness, or an overlapped hovered event would hold the pointer and the tag would
+        // never light (nor click-through: the down path prioritizes the tags identically).
+        if z >= 0.5, nowEdgeTagHit(at: p, g) {
+            hoveredEventId = nil // the "now" tag owns the pointer → mild hover styling on the tag
+            hv.overNowTag = true
+        } else if z >= 0.5, let d = deadlineEdgeTagAt(p, g) {
+            hoveredEventId = d.id // its edge mini pill picks up the mild hover styling
+            hv.overDeadline = true // and the mouse cursor line/tag hide, like over a full label
+        }
         // Hover stickiness: if the cursor is still inside the currently-hovered event,
         // keep it — so moving into an overlap doesn't hand the highlight to the event
         // underneath. Only when the cursor leaves it do we re-pick the topmost.
-        if let cur = hoveredEventId, bandContains(cur, p, g) {
+        else if let cur = hoveredEventId, bandContains(cur, p, g) {
             // keep hoveredEventId — a band (no timeline cursor change)
         } else if let cur = hoveredEventId, timedContains(cur, p, g) {
             hv.overTimed = true // keep hoveredEventId — a timed event
@@ -315,12 +328,6 @@ extension CalendarEngine {
             hoveredEventId = b.id
         } else if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
             hoveredEventId = nil // the indicator stack owns the pointer — no hover on events under it
-        } else if z >= 0.5, nowEdgeTagHit(at: p, g) {
-            hoveredEventId = nil // the "now" tag owns the pointer → mild hover styling on the tag
-            hv.overNowTag = true
-        } else if z >= 0.5, let d = deadlineEdgeTagAt(p, g) {
-            hoveredEventId = d.id // its edge mini pill picks up the mild hover styling
-            hv.overDeadline = true // and the mouse cursor line/tag hide, like over a full label
         } else if z >= 1.5, let e = eventAt(p, g) {
             hoveredEventId = e.id; hv.overTimed = true
         } else if z >= ViewConst.detailZ, let d = deadlineAt(p, g) {
@@ -394,16 +401,15 @@ extension CalendarEngine {
             }
             return hit.id == selectedId ? .text : .grab // a selected band edits its title on click
         }
-        // Edge-indicator stack: a click target (scroll-to-reveal) → the pointing hand.
-        if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
-            return .pointer
-        }
-        // The now-line's edge "now" tag: a click target (scroll-to-center) → the pointing hand.
+        // Edge scroll-chrome click targets → the pointing hand. Same priority order as the
+        // down path (now tag > deadline pill > event stacks), though all three read the same.
         if z >= 0.5, nowEdgeTagHit(at: p, g) {
             return .pointer
         }
-        // A deadline's edge mini pill: the same click target → the pointing hand.
         if z >= 0.5, deadlineEdgeTagAt(p, g) != nil {
+            return .pointer
+        }
+        if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
             return .pointer
         }
         // Timed event: the top/bottom edges resize (↕); the title of a SELECTED event is an I-beam (a second

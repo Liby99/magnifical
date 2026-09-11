@@ -42,6 +42,32 @@ final class NowEdgeClickTests: XCTestCase {
         XCTAssertEqual(tween.to, expected, accuracy: tl.hourH / 20, "now lands mid-viewport")
     }
 
+    func testNowTagBeatsOverlappingDeadlinePill() throws {
+        // A deadline on TODAY scrolled out the same edge as "now": its mini pill and the "now"
+        // tag sit beside the same column at the same edge y — overlapping. "now" must win.
+        let e = CalendarEngine()
+        e.viewport = Viewport(w: 1200, h: 800)
+        let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
+        e.z = 2
+        e.focus = (c.month ?? 1) - 1
+        e.week = CGFloat((firstDOW(e.year, e.focus) + (c.day ?? 1) - 1) / 7)
+        let nowFrac = CGFloat(c.hour ?? 0) + CGFloat(c.minute ?? 0) / 60
+        // Both out through the SAME edge: early window → both below; late window → both above.
+        let ddlHour: CGFloat = nowFrac < 12 ? (nowFrac < 6 ? 10 : 1) : (nowFrac < 18 ? 23 : 13)
+        _ = e.createDeadline(year: e.year, month: e.focus, day: c.day ?? 1, hour: ddlHour,
+                             title: "Clash", color: "red")
+        e.demoScrollTimelineToHour(nowFrac < 12 ? 16 : 2)
+        let g = e.snapshotInput()
+        let tagRect = try XCTUnwrap(nowEdgeTagRects(g).first, "the 'now' tag is up")
+        let d = try XCTUnwrap(e.viewDeadlines().first)
+        let pill = try XCTUnwrap(deadlineEdgeLabel(d, g), "the deadline pill is up")
+        XCTAssertTrue(tagRect.intersects(pill.rect), "precondition: the two genuinely overlap")
+        let p = CGPoint(x: pill.rect.midX, y: pill.rect.midY) // inside BOTH
+        e.onHover(at: p)
+        XCTAssertTrue(e.hover.overNowTag, "\"now\" wins the overlap")
+        XCTAssertNil(e.hoveredEventId, "…so the deadline pill does NOT light up")
+    }
+
     func testTagRectsEmptyWhileNowVisible() throws {
         let e = CalendarEngine()
         e.viewport = Viewport(w: 1200, h: 800)

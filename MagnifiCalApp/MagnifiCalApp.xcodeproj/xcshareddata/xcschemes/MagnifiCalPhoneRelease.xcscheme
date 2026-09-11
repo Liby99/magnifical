@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1430"
-   version = "1.7">
+   version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES"
-      runPostActionsOnFailure = "NO">
+      buildImplicitDependencies = "YES">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -16,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
-               BuildableName = "CalendarPhone.app"
+               BuildableName = "MagnifiCal.app"
                BlueprintName = "CalendarPhone"
                ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
             </BuildableReference>
@@ -27,21 +26,18 @@
       buildConfiguration = "Release"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      shouldUseLaunchSchemeArgsEnv = "YES">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
-            BuildableName = "CalendarPhone.app"
+            BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
       </Testables>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Release"
@@ -58,13 +54,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
-            BuildableName = "CalendarPhone.app"
+            BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -77,13 +71,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AEECD411C32ADB7644ACEB06"
-            BuildableName = "CalendarPhone.app"
+            BuildableName = "MagnifiCal.app"
             BlueprintName = "CalendarPhone"
             ReferencedContainer = "container:MagnifiCalApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Release">
