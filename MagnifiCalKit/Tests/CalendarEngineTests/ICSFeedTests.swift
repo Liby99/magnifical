@@ -115,7 +115,7 @@ final class ICSFeedTests: XCTestCase {
         while b64.count % 4 != 0 {
             b64 += "="
         }
-        let decoded = String(data: try XCTUnwrap(Data(base64Encoded: b64)), encoding: .utf8)
+        let decoded = try String(data: XCTUnwrap(Data(base64Encoded: b64)), encoding: .utf8)
         XCTAssertEqual(decoded, "standup someone@gmail.com", "uid local part + decoded calendar id")
 
         XCTAssertEqual(e.importedProvenance("apple-uid1-20260706-0900")?.label, "Apple Calendar")
@@ -135,7 +135,7 @@ final class ICSFeedTests: XCTestCase {
     /// Per-feed DEFAULT colors: new subscriptions cycle the palette; an item without a per-item
     /// override follows the feed default (so a Settings change propagates to it), while an item
     /// the user recolored (colorOverride — the "changed" bit) stays pinned.
-    func testFeedDefaultColorsCycleAndPropagate() throws {
+    func testFeedDefaultColorsCycleAndPropagate() {
         redirectStoreToTemp()
         let u1 = "https://calendar.google.com/calendar/ical/one/private-a/basic.ics"
         let u2 = "https://outlook.live.com/owa/calendar/two/b/calendar.ics"

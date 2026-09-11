@@ -15,7 +15,7 @@
     struct TodoRowEditor: View {
         let todo: ParsedTodo
         let theme: Theme
-        var preselect: String? = nil // select this PREFIX on open (placeholder flows) instead of caret-at-end
+        var preselect: String? // select this PREFIX on open (placeholder flows) instead of caret-at-end
         /// Called exactly once: the edited rest (trimmed) to commit, or nil to cancel.
         let onFinish: (String?) -> Void
 
@@ -35,7 +35,7 @@
         let head: String // the immutable "- [ ] " prefix, for virtual-line highlighting only
         let initial: String // the editable rest, seeded into the field
         let theme: Theme
-        var preselect: String? = nil // select this prefix of `initial` on focus (else caret at end)
+        var preselect: String? // select this prefix of `initial` on focus (else caret at end)
         let onFinish: (String?) -> Void
 
         func makeCoordinator() -> Coordinator {

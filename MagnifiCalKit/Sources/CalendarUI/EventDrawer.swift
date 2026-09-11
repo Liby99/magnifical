@@ -27,7 +27,7 @@ public final class CalendarUIState {
     /// window-level DialogOverlay so the blur covers the WHOLE window, not just the panel.
     public struct PendingTodoDelete {
         public var text: String
-        public var source: String? = nil // "event “X”" / "the daily note on …" — the dialog's "from" line
+        public var source: String? // "event “X”" / "the daily note on …" — the dialog's "from" line
         public var confirm: () -> Void
     }
 

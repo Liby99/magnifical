@@ -147,7 +147,7 @@ enum AppKeyState: Equatable {
 @MainActor struct KeyboardModel {
     let engine: CalendarEngine
     let ui: CalendarUIState
-    var dashNav: NativeDashNavModel? = nil // TODO-panel mouse selection (Enter-to-edit fallback)
+    var dashNav: NativeDashNavModel? // TODO-panel mouse selection (Enter-to-edit fallback)
 
     var state: AppKeyState {
         if engine.timedEditing {

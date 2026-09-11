@@ -565,10 +565,21 @@ final class CatcherView: NSView, NSMenuItemValidation {
     /// two fingers are down (resting thumb, Magic Mouse).
     private var touchAxisDeg: CGFloat?
 
-    override func touchesBegan(with event: NSEvent) { updateTouchAxis(event) }
-    override func touchesMoved(with event: NSEvent) { updateTouchAxis(event) }
-    override func touchesEnded(with event: NSEvent) { updateTouchAxis(event) }
-    override func touchesCancelled(with event: NSEvent) { touchAxisDeg = nil }
+    override func touchesBegan(with event: NSEvent) {
+        updateTouchAxis(event)
+    }
+
+    override func touchesMoved(with event: NSEvent) {
+        updateTouchAxis(event)
+    }
+
+    override func touchesEnded(with event: NSEvent) {
+        updateTouchAxis(event)
+    }
+
+    override func touchesCancelled(with event: NSEvent) {
+        touchAxisDeg = nil
+    }
 
     private func updateTouchAxis(_ e: NSEvent) {
         // in: nil — all the window's touches, not just ones that began over this view.
@@ -598,7 +609,10 @@ final class CatcherView: NSView, NSMenuItemValidation {
         }
         if CCTrace.on {
             if began {
-                CCTrace.event("pinchBegan L\(engine?.chrome.level ?? -1)\(pinchTarget == .tlScale ? " tlScale" : pinchTarget == .undecided ? " undecided" : "")")
+                CCTrace
+                    .event(
+                        "pinchBegan L\(engine?.chrome.level ?? -1)\(pinchTarget == .tlScale ? " tlScale" : pinchTarget == .undecided ? " undecided" : "")"
+                    )
             }
             if ended {
                 CCTrace.event("pinchEnded")

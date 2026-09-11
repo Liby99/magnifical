@@ -98,7 +98,7 @@ struct BatchDeleteDialog: View {
 /// Cancel / Delete — BatchDeleteDialog's exact card recipe (scrim, glass card, capsule buttons).
 struct TodoDeleteDialog: View {
     let text: String
-    var source: String? = nil // names the note/event the line will be removed from
+    var source: String? // names the note/event the line will be removed from
     let theme: Theme
     var onDelete: () -> Void
     var onCancel: () -> Void

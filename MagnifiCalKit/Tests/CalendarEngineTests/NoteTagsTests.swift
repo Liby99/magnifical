@@ -63,21 +63,24 @@ final class NoteTagsTests: XCTestCase {
         XCTAssertEqual(e.notes(id), notes)
     }
 
-    func testImportedTagPreservedWithoutPollutingNotes() {
+    func testImportedTagPreservedWithoutPollutingNotes() throws {
         let e = CalendarEngine()
         let series = "gcal-k9-uid7"
-        e.items.richById[series] = RichFields(notes: "<!-- libirabu:import:begin -->\nimported from: Google Calendar feed\n<!-- libirabu:import:end -->",
-                                              tags: ["imported"], source: "ical")
+        e.items.richById[series] = RichFields(
+            notes: "<!-- libirabu:import:begin -->\nimported from: Google Calendar feed\n<!-- libirabu:import:end -->",
+            tags: ["imported"],
+            source: "ical"
+        )
         e.migrateTagsIntoNotes()
-        XCTAssertFalse(e.items.richById[series]!.notes!.contains("#imported"),
+        XCTAssertFalse(try XCTUnwrap(e.items.richById[series]?.notes?.contains("#imported")),
                        "the system tag never becomes note text")
-        XCTAssertEqual(e.items.richById[series]!.tags, ["imported"],
+        XCTAssertEqual(try XCTUnwrap(e.items.richById[series]?.tags), ["imported"],
                        "…but survives in the cache for the tag filter")
         // A user-typed tag in the postfix joins the cache alongside it.
-        var rf = e.items.richById[series]!
-        rf.notes = rf.notes! + "\nmy remark #conf"
+        var rf = try XCTUnwrap(e.items.richById[series])
+        rf.notes = try XCTUnwrap(rf.notes) + "\nmy remark #conf"
         e.items.richById[series] = rf
         e.syncTagCache(series)
-        XCTAssertEqual(Set(e.items.richById[series]!.tags), Set(["conf", "imported"]))
+        XCTAssertEqual(try Set(XCTUnwrap(e.items.richById[series]?.tags)), Set(["conf", "imported"]))
     }
 }

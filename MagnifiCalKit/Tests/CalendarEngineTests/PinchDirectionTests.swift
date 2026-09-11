@@ -9,10 +9,15 @@ import XCTest
 
 @MainActor
 final class PinchDirectionTests: XCTestCase {
-    override func setUp() { super.setUp(); redirectStoreToTemp() }
-    override func tearDown() { unsetenv("CC_DEMO_DATADIR"); super.tearDown() }
+    override func setUp() {
+        super.setUp(); redirectStoreToTemp()
+    }
 
-    func testGateOnlyInDayViewOverTimeline() throws {
+    override func tearDown() {
+        unsetenv("CC_DEMO_DATADIR"); super.tearDown()
+    }
+
+    func testGateOnlyInDayViewOverTimeline() {
         let e = CalendarEngine()
         e.viewport = Viewport(w: 1200, h: 800)
         e.focus = 6

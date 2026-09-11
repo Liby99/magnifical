@@ -25,8 +25,8 @@ import SwiftUI
 
     /// now-line / mouse cursor + their labels — drawn in the top pass, above everything.
     private static func isForeground(_ k: ItemKind) -> Bool {
-        switch k { case .now, .nowLabel, .nowEdge, .nowLabelEdge, .cursor, .timeTag: return true
-        default: return false }
+        switch k { case .now, .nowLabel, .nowEdge, .nowLabelEdge, .cursor, .timeTag: true
+        default: false }
     }
 
     /// Two disjoint regions. Content items clip to the content rect; gutter items

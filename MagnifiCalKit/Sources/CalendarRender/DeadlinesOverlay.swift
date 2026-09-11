@@ -293,7 +293,10 @@ private struct DeadlinePill: View {
         .background {
             ZStack {
                 GlassRevealBase(shape: shape, active: activation.isActive, theme: theme)
-                Color.clear.glassEffectCompat(.regular.tint(color.opacity(activation.tint * theme.eventTintScale)), in: shape)
+                Color.clear.glassEffectCompat(
+                    .regular.tint(color.opacity(activation.tint * theme.eventTintScale)),
+                    in: shape
+                )
             }
         }
         .clipShape(shape) // shrinking frame: the fading text must not spill past the pill

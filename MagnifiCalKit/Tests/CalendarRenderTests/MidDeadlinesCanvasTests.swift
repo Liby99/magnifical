@@ -23,7 +23,9 @@ final class MidDeadlinesCanvasTests: XCTestCase {
         setenv("CC_DEMO_DATADIR", dir, 1) // never touch the real store
     }
 
-    override func tearDown() { unsetenv("CC_DEMO_DATADIR"); super.tearDown() }
+    override func tearDown() {
+        unsetenv("CC_DEMO_DATADIR"); super.tearDown()
+    }
 
     private func makeCanvas() -> MidDeadlinesCanvas {
         let e = CalendarEngine()

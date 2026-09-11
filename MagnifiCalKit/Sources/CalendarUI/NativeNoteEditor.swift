@@ -632,9 +632,9 @@ struct NativeNoteEditor: NSViewRepresentable {
             sessionDirty = false // the programmatic rewrite must not re-arm the session
         }
 
-        // ── Highlighting: full-document, attribute-only (selection + undo untouched) ─────────
-        // The per-line rules live in MarkdownHighlight (CalendarRender) — shared with the TODO
-        // row's inline line editor, so both editors carry one look.
+        /// ── Highlighting: full-document, attribute-only (selection + undo untouched) ─────────
+        /// The per-line rules live in MarkdownHighlight (CalendarRender) — shared with the TODO
+        /// row's inline line editor, so both editors carry one look.
         func highlight() {
             NativeDash.diagTime("editorHighlight") { highlightBody() }
         }

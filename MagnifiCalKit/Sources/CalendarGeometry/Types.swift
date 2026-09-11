@@ -67,9 +67,9 @@ public struct Hover: Sendable, Equatable {
 public enum ItemKind: Sendable {
     case row, event, monthLabel, dayLabel, gridline, dim, hl, today, todayMonth, now
     case todayTag, nowLabel, timeTag, cursor, weekdayTag, weekend
-    // The now-line's EDGE INDICATOR when "now" is scrolled out of the timeline (the deadline
-    // edge-indicator idea): a thin accent line hugging the edge (nowEdge, Canvas) + a small
-    // "now" tag (nowLabelEdge, SwiftUI glass like the full CURRENT TIME pill).
+    /// The now-line's EDGE INDICATOR when "now" is scrolled out of the timeline (the deadline
+    /// edge-indicator idea): a thin accent line hugging the edge (nowEdge, Canvas) + a small
+    /// "now" tag (nowLabelEdge, SwiftUI glass like the full CURRENT TIME pill).
     case nowEdge, nowLabelEdge
 }
 

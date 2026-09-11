@@ -32,7 +32,10 @@ public struct ChangelogChange: Identifiable, Sendable {
 }
 
 public struct ChangelogRelease: Identifiable, Sendable {
-    public var id: String { version }
+    public var id: String {
+        version
+    }
+
     public let version: String
     public let date: String // "August 10, 2026" — display form
     public let headline: String? // one-line theme of the release, shown under the version
@@ -43,91 +46,233 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.4.0", date: "September 11, 2026",
+            headline: "TODO rows you can select and edit in place, and edge tags that work harder.",
+            changes: [
+                .init(.added, "**TODO rows are selectable**: click selects (accent wash + bar), shift+click multi-selects, double-click jumps to the source. **Enter** edits the row inline in the note editor's exact face; **⇧Enter** adds a sub-item, **⌘Enter** a sibling; **Delete** confirms (naming the line's home) then removes — everything one ⌘Z step."),
+                .init(.added, "A **dashboard toggle button** in the toolbar, left of Today — ⌘B's button form (the right-sidebar glyph, accent-tinted while pinned); shown at month/week zoom."),
+                .init(.improved, "The edge **\"now\" tag and deadline mini pills are click targets**: a click glides the timeline to center that time, with a hover highlight and the hand cursor — and the big label morphs **continuously** into its mini tag as it scrolls off, never jumping sides."),
+                .init(.improved, "**Day view pinch**: pinching out over the timeline always stretches the hours (there's nothing deeper to zoom into); pinching in still zooms out to week."),
+                .init(.improved, "**Time ticks densify** as you stretch the timeline: past the midpoint a label every hour, near the top half-hour ticks too."),
+                .init(.fixed, "**Deadline labels frost like events**: hovering one now shows real Liquid Glass; where a deadline overlaps an event, the deadline takes the hover/click; and labels render above the gutter's time ticks."),
+                .init(.fixed, "**PROJ quick-add** no longer shuffles the project ordering under your cursor — the new row simply appears on top of its project."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.3.4", date: "September 10, 2026",
             headline: "Pinch the timeline taller, and nothing slips off its edge unseen.",
             changes: [
-                .init(.added, "**Pinch vertically** over the week/day timeline to stretch or squeeze the hours — the same scale the edge bar drags, anchored on the hour under your fingers. Any other pinch still zooms between views."),
-                .init(.added, "**Deadlines** scrolled out of the timeline hold at its edge — a thin line with a small empty deadline pill — just like timed events' edge cards."),
-                .init(.added, "The **current-time line** does the same: scrolled out of view, it leaves a thin accent edge line with a mini *now* tag."),
-                .init(.improved, "The timeline-edge deadline **quick-add \"+\"** lights up in the accent color on hover instead of darkening."),
-                .init(.fixed, "Todos written by the **AI assistant** get their `created:` stamp, so they age and sort like hand-written ones."),
-                .init(.fixed, "**Right-clicking a TODO/PROJ row** opens its menu instantly, and Delete no longer freezes the app."),
+                .init(
+                    .added,
+                    "**Pinch vertically** over the week/day timeline to stretch or squeeze the hours — the same scale the edge bar drags, anchored on the hour under your fingers. Any other pinch still zooms between views."
+                ),
+                .init(
+                    .added,
+                    "**Deadlines** scrolled out of the timeline hold at its edge — a thin line with a small empty deadline pill — just like timed events' edge cards."
+                ),
+                .init(
+                    .added,
+                    "The **current-time line** does the same: scrolled out of view, it leaves a thin accent edge line with a mini *now* tag."
+                ),
+                .init(
+                    .improved,
+                    "The timeline-edge deadline **quick-add \"+\"** lights up in the accent color on hover instead of darkening."
+                ),
+                .init(
+                    .fixed,
+                    "Todos written by the **AI assistant** get their `created:` stamp, so they age and sort like hand-written ones."
+                ),
+                .init(
+                    .fixed,
+                    "**Right-clicking a TODO/PROJ row** opens its menu instantly, and Delete no longer freezes the app."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.3.3", date: "September 4, 2026",
             headline: "iCloud sync can no longer wedge itself.",
             changes: [
-                .init(.fixed, "**Sync retry storms are gone** — sends that can never succeed (leftovers from another calendar's zone, stale server tags, server-rejected records) are pruned from the queue instead of retrying forever and blocking every edit behind them."),
-                .init(.fixed, "Sync logging is honest end to end: every send reports what was **saved, deleted, and failed**, and note edits leave numbered breadcrumbs so a stuck note names exactly where it died."),
+                .init(
+                    .fixed,
+                    "**Sync retry storms are gone** — sends that can never succeed (leftovers from another calendar's zone, stale server tags, server-rejected records) are pruned from the queue instead of retrying forever and blocking every edit behind them."
+                ),
+                .init(
+                    .fixed,
+                    "Sync logging is honest end to end: every send reports what was **saved, deleted, and failed**, and note edits leave numbered breadcrumbs so a stuck note names exactly where it died."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.3.2", date: "September 4, 2026",
             headline: "Notes sync everywhere, self-healing iCloud, and a deadline-drag fix.",
             changes: [
-                .init(.fixed, "**Daily, weekly, and monthly notes sync via iCloud** — they previously never left the Mac, so the iPhone's NOTE tab and note-sourced to-dos were always empty."),
-                .init(.fixed, "iCloud sync **self-heals** items stuck with a stale server tag instead of silently dropping them, and Settings ▸ Developer gains *Log Store Census* — a category-by-category item count for diffing two devices systematically."),
-                .init(.fixed, "Dragging a deadline by its **label pill** moves the moment line with it again — the line could stay frozen at the old time until something else redrew."),
-                .init(.improved, "**iPhone**: month swipes settle with the system's native paging physics — no more slow crawl at the end of a flick."),
+                .init(
+                    .fixed,
+                    "**Daily, weekly, and monthly notes sync via iCloud** — they previously never left the Mac, so the iPhone's NOTE tab and note-sourced to-dos were always empty."
+                ),
+                .init(
+                    .fixed,
+                    "iCloud sync **self-heals** items stuck with a stale server tag instead of silently dropping them, and Settings ▸ Developer gains *Log Store Census* — a category-by-category item count for diffing two devices systematically."
+                ),
+                .init(
+                    .fixed,
+                    "Dragging a deadline by its **label pill** moves the moment line with it again — the line could stay frozen at the old time until something else redrew."
+                ),
+                .init(
+                    .improved,
+                    "**iPhone**: month swipes settle with the system's native paging physics — no more slow crawl at the end of a flick."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.3.1", date: "August 20, 2026",
             headline: "A lighter app, visible sync, and the calendar in your menu bar.",
             changes: [
-                .init(.improved, "**~12MB lighter** — tutorial demos are compact videos now (sharper than the old GIFs), and Help demos/screenshots stream on first view instead of shipping in the app."),
-                .init(.improved, "The **menu-bar item** is a calendar (not the AI sparkles): *Open MagnifiCal* on top, plus *Past Conversations* — the chat with its history sidebar already open."),
-                .init(.fixed, "**iCloud sync** logs its lifecycle and failures instead of silently swallowing them, and Settings ▸ Developer gains *Push Everything to iCloud* to re-offer a calendar + the registry to the server."),
-                .init(.added, "**iPhone**: the dashboard drawer — TODO / PROJ / NOTE as a read-only bottom sheet following your zoom level — and a Settings ▸ MagnifiCal pane."),
-                .init(.fixed, "**iPhone**: a fresh install adopts your primary cloud calendar instead of showing an empty default forever."),
+                .init(
+                    .improved,
+                    "**~12MB lighter** — tutorial demos are compact videos now (sharper than the old GIFs), and Help demos/screenshots stream on first view instead of shipping in the app."
+                ),
+                .init(
+                    .improved,
+                    "The **menu-bar item** is a calendar (not the AI sparkles): *Open MagnifiCal* on top, plus *Past Conversations* — the chat with its history sidebar already open."
+                ),
+                .init(
+                    .fixed,
+                    "**iCloud sync** logs its lifecycle and failures instead of silently swallowing them, and Settings ▸ Developer gains *Push Everything to iCloud* to re-offer a calendar + the registry to the server."
+                ),
+                .init(
+                    .added,
+                    "**iPhone**: the dashboard drawer — TODO / PROJ / NOTE as a read-only bottom sheet following your zoom level — and a Settings ▸ MagnifiCal pane."
+                ),
+                .init(
+                    .fixed,
+                    "**iPhone**: a fresh install adopts your primary cloud calendar instead of showing an empty default forever."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.3.0", date: "August 19, 2026",
             headline: "Markdown tags, timeline edge indicators, and a fully native editor.",
             changes: [
-                .init(.added, "**Tags are markdown** — type `#tag` anywhere in a note (a space after `#` still makes a heading); existing tags migrate into the notes automatically and the drawer's separate Tags UI is gone."),
-                .init(.added, "Week/day timelines: events scrolled out of view hold as small **edge cards** — color + accent bar, stacked as a staircase, moving with the scroll; click a stack to bring the nearest hidden event back."),
-                .init(.added, "**Help ▸ What's New** — this window; each release's changes with Added/Improved/Fixed badges."),
-                .init(.added, "Per-subscription **default colors** for Google/Outlook feeds — a swatch on each Settings row; changing it re-colors the feed's events you haven't individually recolored."),
-                .init(.improved, "**Fully native** — the retired web-based note editor and its ~3MB of bundled JavaScript are gone (smaller app, one rendering stack)."),
-                .init(.improved, "The pinned monthly dashboard opens **wider** by default (a width you dragged yourself is kept)."),
+                .init(
+                    .added,
+                    "**Tags are markdown** — type `#tag` anywhere in a note (a space after `#` still makes a heading); existing tags migrate into the notes automatically and the drawer's separate Tags UI is gone."
+                ),
+                .init(
+                    .added,
+                    "Week/day timelines: events scrolled out of view hold as small **edge cards** — color + accent bar, stacked as a staircase, moving with the scroll; click a stack to bring the nearest hidden event back."
+                ),
+                .init(
+                    .added,
+                    "**Help ▸ What's New** — this window; each release's changes with Added/Improved/Fixed badges."
+                ),
+                .init(
+                    .added,
+                    "Per-subscription **default colors** for Google/Outlook feeds — a swatch on each Settings row; changing it re-colors the feed's events you haven't individually recolored."
+                ),
+                .init(
+                    .improved,
+                    "**Fully native** — the retired web-based note editor and its ~3MB of bundled JavaScript are gone (smaller app, one rendering stack)."
+                ),
+                .init(
+                    .improved,
+                    "The pinned monthly dashboard opens **wider** by default (a width you dragged yourself is kept)."
+                ),
                 .init(.fixed, "Typing in a note — especially a `#tag` — no longer gets laggier with every character."),
-                .init(.fixed, "A line starting with `#tag` (no space) chips as a tag instead of rendering as a huge heading."),
-                .init(.fixed, "With two note editors open, **⌘S** saves exactly the note holding the cursor — not whichever editor came first."),
-                .init(.fixed, "The Help browser's Projects/Gantt and token screenshots and the AI-assistant tutorial recording are current again."),
+                .init(
+                    .fixed,
+                    "A line starting with `#tag` (no space) chips as a tag instead of rendering as a huge heading."
+                ),
+                .init(
+                    .fixed,
+                    "With two note editors open, **⌘S** saves exactly the note holding the cursor — not whichever editor came first."
+                ),
+                .init(
+                    .fixed,
+                    "The Help browser's Projects/Gantt and token screenshots and the AI-assistant tutorial recording are current again."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.2.0", date: "August 10, 2026",
             headline: "External calendars, multiple MagnifiCals, and self-updating builds.",
             changes: [
-                .init(.added, "**Automatic updates** for the direct-download build — MagnifiCal ▸ Check for Updates…, plus a daily background check."),
-                .init(.added, "**Google Calendar and Outlook** feeds via their secret/published ICS addresses — subscriptions belong to the MagnifiCal calendar that adds them, rows show the real calendar names, and Google events link back with *Edit original*."),
-                .init(.added, "Multiple-calendar polish: File ▸ **Calendars** lists every calendar with its item count and a tick on the open one; Main can never be removed; Settings clearly shows which calendar imports configure."),
-                .init(.added, "Per-dashboard **TODO layering**: each scope chooses which note sources and collections feed its list (⚙ in the TODO panel)."),
-                .init(.added, "**Project boxes** on the projects timeline: a band event tagged `@project:` charts as a region spanning its dates."),
+                .init(
+                    .added,
+                    "**Automatic updates** for the direct-download build — MagnifiCal ▸ Check for Updates…, plus a daily background check."
+                ),
+                .init(
+                    .added,
+                    "**Google Calendar and Outlook** feeds via their secret/published ICS addresses — subscriptions belong to the MagnifiCal calendar that adds them, rows show the real calendar names, and Google events link back with *Edit original*."
+                ),
+                .init(
+                    .added,
+                    "Multiple-calendar polish: File ▸ **Calendars** lists every calendar with its item count and a tick on the open one; Main can never be removed; Settings clearly shows which calendar imports configure."
+                ),
+                .init(
+                    .added,
+                    "Per-dashboard **TODO layering**: each scope chooses which note sources and collections feed its list (⚙ in the TODO panel)."
+                ),
+                .init(
+                    .added,
+                    "**Project boxes** on the projects timeline: a band event tagged `@project:` charts as a region spanning its dates."
+                ),
                 .init(.added, "The sidebar **auto-hides** when a pinned dashboard leaves the window too narrow."),
-                .init(.improved, "Hovered events read as real **Liquid Glass** again — the glass frosts what's beneath, and overlapping events join in. Runs on macOS 15+ with a material fallback."),
-                .init(.improved, "The **delete dialog** is systematic: *Remove from Lane* for promoted bars, *Hide Occurrence / Hide Series / Unhide* for imported events."),
-                .init(.improved, "Note-preview **checkboxes** match the dashboard TODO list — same styling, strike-through on done, `done:` stamps on toggle."),
-                .init(.improved, "**Projects panel** opens without lag — scoring and date math rebuilt, note indexing moved off the main thread."),
+                .init(
+                    .improved,
+                    "Hovered events read as real **Liquid Glass** again — the glass frosts what's beneath, and overlapping events join in. Runs on macOS 15+ with a material fallback."
+                ),
+                .init(
+                    .improved,
+                    "The **delete dialog** is systematic: *Remove from Lane* for promoted bars, *Hide Occurrence / Hide Series / Unhide* for imported events."
+                ),
+                .init(
+                    .improved,
+                    "Note-preview **checkboxes** match the dashboard TODO list — same styling, strike-through on done, `done:` stamps on toggle."
+                ),
+                .init(
+                    .improved,
+                    "**Projects panel** opens without lag — scoring and date math rebuilt, note indexing moved off the main thread."
+                ),
                 .init(.fixed, "Per-occurrence (*This Event*) notes save correctly and round-trip through iCloud."),
-                .init(.fixed, "Deleted events no longer resurrect from other calendars' iCloud zones; Settings ▸ Developer can prune orphaned zones."),
-                .init(.fixed, "`.ics` import keeps Outlook/Exchange events at the right time — full timezone resolution (Windows zone names, embedded VTIMEZONE rules, UTC offsets)."),
-                .init(.fixed, "Clicking a note-sourced TODO lands in the note editor at that line; imported events no longer offer a Repeat section (recurrence belongs to the source calendar)."),
+                .init(
+                    .fixed,
+                    "Deleted events no longer resurrect from other calendars' iCloud zones; Settings ▸ Developer can prune orphaned zones."
+                ),
+                .init(
+                    .fixed,
+                    "`.ics` import keeps Outlook/Exchange events at the right time — full timezone resolution (Windows zone names, embedded VTIMEZONE rules, UTC offsets)."
+                ),
+                .init(
+                    .fixed,
+                    "Clicking a note-sourced TODO lands in the note editor at that line; imported events no longer offer a Repeat section (recurrence belongs to the source calendar)."
+                ),
             ]
         ),
         ChangelogRelease(
             version: "0.1.0", date: "July 21, 2026",
             headline: "The baseline: a calendar you zoom.",
             changes: [
-                .init(.added, "The zoomable calendar: year, month, week, and day on one canvas — continuous gestures, timed events, multi-day bands, deadlines with origin timezones, recurrence, and full keyboard control (⌘K guide)."),
-                .init(.added, "Daily / weekly / monthly **dashboards**: a TODO index over event and note tasks (nested sub-tasks with folding), upcoming deadlines, and per-scope Markdown notes."),
-                .init(.added, "**Markdown notes** everywhere, with task lists and a todo token language (`due:` `start:` `p:` `followup:` `#tag` `@project`)."),
-                .init(.added, "**Apple Calendar** import (read-only), `.ics` import/export, iCloud sync across Macs, multiple calendars, and notifications with per-kind preferences."),
-                .init(.added, "An optional **AI assistant** that reads and edits the calendar through audited tools, with your own API keys."),
+                .init(
+                    .added,
+                    "The zoomable calendar: year, month, week, and day on one canvas — continuous gestures, timed events, multi-day bands, deadlines with origin timezones, recurrence, and full keyboard control (⌘K guide)."
+                ),
+                .init(
+                    .added,
+                    "Daily / weekly / monthly **dashboards**: a TODO index over event and note tasks (nested sub-tasks with folding), upcoming deadlines, and per-scope Markdown notes."
+                ),
+                .init(
+                    .added,
+                    "**Markdown notes** everywhere, with task lists and a todo token language (`due:` `start:` `p:` `followup:` `#tag` `@project`)."
+                ),
+                .init(
+                    .added,
+                    "**Apple Calendar** import (read-only), `.ics` import/export, iCloud sync across Macs, multiple calendars, and notifications with per-kind preferences."
+                ),
+                .init(
+                    .added,
+                    "An optional **AI assistant** that reads and edits the calendar through audited tools, with your own API keys."
+                ),
                 .init(.added, "An iPhone **companion app** (read-only) over the same iCloud data."),
             ]
         ),

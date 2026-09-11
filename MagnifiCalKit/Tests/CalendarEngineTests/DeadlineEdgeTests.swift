@@ -9,8 +9,13 @@ import XCTest
 
 @MainActor
 final class DeadlineEdgeTests: XCTestCase {
-    override func setUp() { super.setUp(); redirectStoreToTemp() }
-    override func tearDown() { unsetenv("CC_DEMO_DATADIR"); super.tearDown() }
+    override func setUp() {
+        super.setUp(); redirectStoreToTemp()
+    }
+
+    override func tearDown() {
+        unsetenv("CC_DEMO_DATADIR"); super.tearDown()
+    }
 
     private func makeEngine() -> (CalendarEngine, String) {
         let e = CalendarEngine()

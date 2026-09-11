@@ -8,8 +8,13 @@ import XCTest
 
 @MainActor
 final class NowEdgeClickTests: XCTestCase {
-    override func setUp() { super.setUp(); redirectStoreToTemp() }
-    override func tearDown() { unsetenv("CC_DEMO_DATADIR"); super.tearDown() }
+    override func setUp() {
+        super.setUp(); redirectStoreToTemp()
+    }
+
+    override func tearDown() {
+        unsetenv("CC_DEMO_DATADIR"); super.tearDown()
+    }
 
     func testHoverAndClickOnNowTag() throws {
         let e = CalendarEngine()
@@ -68,7 +73,7 @@ final class NowEdgeClickTests: XCTestCase {
         XCTAssertNil(e.hoveredEventId, "…so the deadline pill does NOT light up")
     }
 
-    func testTagRectsEmptyWhileNowVisible() throws {
+    func testTagRectsEmptyWhileNowVisible() {
         let e = CalendarEngine()
         e.viewport = Viewport(w: 1200, h: 800)
         let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: Date())

@@ -42,7 +42,7 @@ import Observation
     public var noteFocusSeq = 0
     @ObservationIgnored private var jumpSeq = 0
 
-    // ── Mouse selection (macOS TODO panel) ─────────────────────────────────────────────
+    /// ── Mouse selection (macOS TODO panel) ─────────────────────────────────────────────
     /// Clicked-selected rows by soft-link anchor: single click replaces the set, shift+click
     /// toggles membership. A checkbox click on a member of a MULTI-selection drives every
     /// selected row to the clicked row's new state; Enter with exactly ONE selection opens

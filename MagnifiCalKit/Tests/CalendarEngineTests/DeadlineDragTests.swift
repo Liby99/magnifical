@@ -10,8 +10,13 @@ import XCTest
 
 @MainActor
 final class DeadlineDragTests: XCTestCase {
-    override func setUp() { super.setUp(); redirectStoreToTemp() }
-    override func tearDown() { unsetenv("CC_DEMO_DATADIR"); super.tearDown() }
+    override func setUp() {
+        super.setUp(); redirectStoreToTemp()
+    }
+
+    override func tearDown() {
+        unsetenv("CC_DEMO_DATADIR"); super.tearDown()
+    }
 
     func testLabelDragMovesDataAndLineGeometry() throws {
         let e = CalendarEngine()
