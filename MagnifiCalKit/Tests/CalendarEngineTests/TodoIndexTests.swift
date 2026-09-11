@@ -110,6 +110,24 @@ final class TodoIndexTests: XCTestCase {
         XCTAssertEqual(TodoIndex.toggleTodoLine(note, line: 1, checked: false), note)
     }
 
+    func testTaskLinePartsAndReplaceRest() throws {
+        // taskLineParts: head keeps indent + marker + state; rest drops the one separating space.
+        let parts = try XCTUnwrap(TodoIndex.taskLineParts("  - [x] ship it #tag done:2026-09-01"))
+        XCTAssertEqual(parts.head, "  - [x] ")
+        XCTAssertEqual(parts.rest, "ship it #tag done:2026-09-01")
+        XCTAssertNil(TodoIndex.taskLineParts("prose line"))
+
+        // replaceTodoRest: rest swapped, indent + checked state preserved; other lines untouched.
+        let note = "- [ ] a\n  - [x] old text done:2026-07-01\nprose"
+        XCTAssertEqual(TodoIndex.replaceTodoRest(note, line: 2, rest: "new text p:!!"),
+                       "- [ ] a\n  - [x] new text p:!!\nprose")
+        // Whitespace-only rest is a no-op (the editor treats it as cancel), same-note contract.
+        XCTAssertEqual(TodoIndex.replaceTodoRest(note, line: 2, rest: "   "), note)
+        // Stale anchors: not a task line / line gone.
+        XCTAssertNil(TodoIndex.replaceTodoRest(note, line: 3, rest: "x"))
+        XCTAssertNil(TodoIndex.replaceTodoRest(note, line: 9, rest: "x"))
+    }
+
     func testLinesNeedingCreated() {
         let note = """
         - [ ] no stamp

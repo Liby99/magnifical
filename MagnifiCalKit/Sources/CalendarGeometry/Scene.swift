@@ -60,6 +60,7 @@ public struct NowLabelSpec: Sendable, Identifiable {
     public var pointsRight: Bool // caret side: true → label sits left of the column, points right
     public var opacity: CGFloat
     public var mini: Bool = false // the edge indicator's small "now" tag (now scrolled off-screen)
+    public var morph: CGFloat = 0 // big→mini shrink progress while the line nears the edge
 }
 
 public func nowLabelSpecs(_ g: SceneInput) -> [NowLabelSpec] {
@@ -75,7 +76,7 @@ public func nowLabelSpecs(_ g: SceneInput) -> [NowLabelSpec] {
         return NowLabelSpec(id: it.key, rect: it.rect, text: it.text ?? "",
                             altText: it.kind == .nowLabelEdge ? nil : altText,
                             pointsRight: it.align == .right, opacity: it.opacity,
-                            mini: it.kind == .nowLabelEdge)
+                            mini: it.kind == .nowLabelEdge, morph: it.morph)
     }
 }
 
@@ -188,18 +189,30 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
     }
 
     func nowLabel(_ key: String, _ x: CGFloat, _ colW: CGFloat, _ lineY: CGFloat, _ active: Bool,
-                  gate: CGFloat = 1) -> Item {
+                  gate: CGFloat = 1, tlTop: CGFloat = -1, tlBottom: CGFloat = -1) -> Item {
         // With the alt-tz column on the pill grows a second time line (see nowLabelSpecs), and
         // widens further when that line carries the "[±1 day]" boundary marker.
         let alt = g.altDeltaHours != nil
         let marker = g.altDeltaHours.map { altDayMarker(minutes: clock.hour * 60 + clock.minute, deltaHours: $0) }
             ?? false
-        let W: CGFloat = alt ? (marker ? 148 : 96) : 88, GAP: CGFloat = 10,
+        var W: CGFloat = alt ? (marker ? 148 : 96) : 88, GAP: CGFloat = 10,
             H: CGFloat = alt ? 47 : 36 // match the deadline label pill's size
+        // Edge morph: as the now-line nears the viewport edge the pill shrinks CONTINUOUSLY
+        // toward the mini "now" tag's size (anchored at its caret side), so the handoff to the
+        // pinned nowLabelEdge tag at the crossing is geometrically seamless.
+        var p: CGFloat = 0
+        if tlBottom > tlTop {
+            p = edgeLabelMorph(y: lineY, tlTop: tlTop, tlBottom: tlBottom)
+            W = lerp(W, 44, p)
+            H = lerp(H, 17, p)
+        }
         let onLeft = g.z > 2 || x + colW / 2 >= (Layout.labelW + g.vp.w) / 2
-        return Item(key: key, kind: .nowLabel, x: onLeft ? x - GAP - W : x + colW + GAP, y: lineY - H / 2, w: W, h: H,
-                    opacity: active ? mul * gate : 0, text: timeStr,
-                    align: onLeft ? .right : .left, instant: g.z > 2, z: g.z > 2 ? 16 : 9)
+        var it = Item(key: key, kind: .nowLabel, x: onLeft ? x - GAP - W : x + colW + GAP, y: lineY - H / 2, w: W,
+                      h: H,
+                      opacity: active ? mul * gate : 0, text: timeStr,
+                      align: onLeft ? .right : .left, instant: g.z > 2, z: g.z > 2 ? 16 : 9)
+        it.morph = p
+        return it
     }
 
     // Year: today's day column in its month band
@@ -281,7 +294,7 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
         let lineY = tlTop + nowFrac * m.hourH - m.scroll
         let lineOn = active && detail && m.hourH > 0 && lineY >= tlTop && lineY <= tlBottom
         items.append(Item(key: "now-m", kind: .now, x: x, y: lineY, w: colW, h: 2, opacity: lineOn ? mul : 0, z: 6))
-        items.append(nowLabel("nl-m", x, colW, lineY, lineOn))
+        items.append(nowLabel("nl-m", x, colW, lineY, lineOn, tlTop: tlTop, tlBottom: tlBottom))
         items += nowEdge("now-m", x, colW, lineY, tlTop: tlTop, tlBottom: tlBottom,
                          active && detail && m.hourH > 0)
     }
@@ -327,7 +340,7 @@ private func buildToday(_ g: SceneInput, _ clock: Clock, mul: CGFloat = 1, fo: I
             instant: g.z > 2,
             z: g.z > 2 ? 16 : 6
         ))
-        items.append(nowLabel("nl-w", x, colW, lineY, lineOn, gate: dgate))
+        items.append(nowLabel("nl-w", x, colW, lineY, lineOn, gate: dgate, tlTop: tlTop, tlBottom: tlBottom))
         items += nowEdge("now-w", x, colW, lineY, tlTop: tlTop, tlBottom: tlBottom,
                          active && m.hourH > 0, gate: dgate)
     }

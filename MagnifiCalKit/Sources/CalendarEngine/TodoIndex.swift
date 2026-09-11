@@ -614,6 +614,32 @@ public enum TodoIndex {
         }
     }
 
+    /// Split a task line into its immutable HEAD (indent + list marker + checkbox, e.g.
+    /// "  - [x] ") and the editable REST (everything after the checkbox, the single separating
+    /// space stripped). nil when `raw` isn't a task line. The row editor seeds from the rest and
+    /// highlights against head+rest; replaceTodoRest writes the rest back.
+    public static func taskLineParts(_ raw: String) -> (head: String, rest: String)? {
+        guard let m = taskLine.first(raw) else { return nil }
+        var rest = m[3]
+        if rest.hasPrefix(" ") {
+            rest.removeFirst()
+        }
+        return ("\(m[1])[\(m[2])] ", rest)
+    }
+
+    /// Replace everything after the checkbox with `rest` (the row editor's commit) — indent,
+    /// list marker, and checked state are preserved. A rest that's empty after trimming is a
+    /// no-op (a todo can't become blank; the editor treats it as cancel). rewriteTaskLine's
+    /// return contract.
+    public static func replaceTodoRest(_ noteText: String, line: Int, rest: String) -> String? {
+        let body = rest.trimmingCharacters(in: .whitespaces)
+        guard !body.isEmpty else { return noteText }
+        return rewriteTaskLine(noteText, line: line) { row in
+            guard let m = taskLine.first(row) else { return row }
+            return "\(m[1])[\(m[2])] \(body)"
+        }
+    }
+
     /// Remove the task line entirely — children/sub-items keep their own lines; only this one
     /// goes. Returns the new note, or nil on a stale anchor (line gone / not a task line).
     public static func removeTodoLine(_ noteText: String, line: Int) -> String? {

@@ -100,6 +100,7 @@ public struct Item: Sendable {
     // month name, hour labels, gutter borders, gutter hover
     public var lineW: CGFloat = 1 // gridline stroke width
     public var hollow: Bool = false // cursor: draw only the end dots, not the connecting line
+    public var morph: CGFloat = 0 // nowLabel: big→mini edge-morph progress (assigned post-init)
 
     public var rect: CGRect {
         CGRect(x: x, y: y, width: w, height: h)

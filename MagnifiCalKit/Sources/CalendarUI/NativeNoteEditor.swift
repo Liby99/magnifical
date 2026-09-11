@@ -266,33 +266,22 @@ struct NativeNoteEditor: NSViewRepresentable {
         return p
     }
 
-    /// The house editor face: Menlo (user preference), CodeMirror's 13px.
+    /// The house editor face / line grid / base attributes — shared with the TODO row's inline
+    /// line editor via MarkdownHighlight (CalendarRender); these forwards keep the many
+    /// call sites here and in the ruler/completion popup unchanged.
     static func monoFont(bold: Bool = false) -> NSFont {
-        NSFont(name: bold ? "Menlo-Bold" : "Menlo", size: 12.5)
-            ?? .monospacedSystemFont(ofSize: 12.5, weight: bold ? .bold : .regular)
+        MarkdownHighlight.monoFont(bold: bold)
     }
 
-    /// ONE line grid for everything (content, typing attributes, ruler): a FIXED fragment
-    /// height with the glyphs re-centered via baselineOffset. TextKit parks glyphs at the
-    /// BOTTOM of an enlarged fragment (that was the "text hugs the bottom of its highlight" +
-    /// "numbers misaligned" + "last line a different height" cluster — the extra/typing
-    /// fragments never even got the paragraph style). Fixed + centered kills the whole class.
-    static let lineHeight: CGFloat = 19
-    static let baselineShift: CGFloat = {
-        let lm = NSLayoutManager()
-        return ((lineHeight - lm.defaultLineHeight(for: monoFont())) / 2).rounded()
-    }()
+    static let lineHeight: CGFloat = MarkdownHighlight.lineHeight
+    static let baselineShift: CGFloat = MarkdownHighlight.baselineShift
 
     static func editorParagraphStyle() -> NSMutableParagraphStyle {
-        let para = NSMutableParagraphStyle()
-        para.minimumLineHeight = lineHeight
-        para.maximumLineHeight = lineHeight
-        return para
+        MarkdownHighlight.editorParagraphStyle()
     }
 
     static func baseAttributes(_ color: NSColor) -> [NSAttributedString.Key: Any] {
-        [.font: monoFont(), .foregroundColor: color,
-         .paragraphStyle: editorParagraphStyle(), .baselineOffset: baselineShift]
+        MarkdownHighlight.baseAttributes(color)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -644,22 +633,8 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         // ── Highlighting: full-document, attribute-only (selection + undo untouched) ─────────
-        // Inline spans (the web's mdHighlight tags): **strong**, *em*/_em_, ~~strike~~,
-        // `code`, and "> " quote lines in grey italic — markers stay visible (source view),
-        // styled dim like CodeMirror's processingInstruction tag.
-        private static let headRe = Re2(#"^#{1,6} .*$"#)
-        private static let taskRe = Re2(#"^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\]"#)
-        private static let doneLineRe = Re2(#"^\s*(?:[-*+]|\d+[.)])\s+\[[xX]\].*$"#)
-        private static let tokenRe = Re2(
-            #"(^|\s)(due:\S+|start:\S+|tz:\S+|color:\S+|done:\S+|created:\S+|followup:\S+|p:!{1,5}|#[A-Za-z0-9_][\w-]*|@[A-Za-z0-9_][\w:-]*|project:[A-Za-z0-9_-]+)(?=\s|$)"#
-        )
-        private static let linkRe = Re2(#"\[[^\]]*\]\([^)\s]+\)"#)
-        private static let boldRe = Re2(#"\*\*[^*\n]+\*\*|__[^_\n]+__"#)
-        private static let emRe = Re2(#"(?<![*_\w])(\*|_)(?![*_\s])[^*_\n]+\1(?![*_\w])"#)
-        private static let strikeSpanRe = Re2(#"~~[^~\n]+~~"#)
-        private static let codeSpanRe = Re2(#"`[^`\n]+`"#)
-        private static let quoteLineRe = Re2(#"^\s*> .*$"#)
-
+        // The per-line rules live in MarkdownHighlight (CalendarRender) — shared with the TODO
+        // row's inline line editor, so both editors carry one look.
         func highlight() {
             NativeDash.diagTime("editorHighlight") { highlightBody() }
         }
@@ -669,84 +644,17 @@ struct NativeNoteEditor: NSViewRepresentable {
             let s = tv.string as NSString
             let all = NSRange(location: 0, length: s.length)
             let base = NSColor(parent.theme.text)
-            let dim = base.withAlphaComponent(0.45)
             let accent = NSColor(Theme.accent)
             storage.beginEditing()
             storage.setAttributes(NativeNoteEditor.baseAttributes(base), range: all)
             s.enumerateSubstrings(in: all, options: [.byLines, .substringNotRequired]) { _, lineRange, _, _ in
                 let line = s.substring(with: lineRange)
-                if Coordinator.headRe.matches(line) {
-                    storage.addAttribute(.font, value: NativeNoteEditor.monoFont(bold: true),
-                                         range: lineRange)
-                }
-                if Coordinator.doneLineRe.matches(line) {
-                    storage.addAttributes([
-                        .foregroundColor: dim,
-                        .strikethroughStyle: NSUnderlineStyle.single.rawValue,
-                    ], range: lineRange)
-                }
-                for r in Coordinator.taskRe.ranges(line) {
-                    storage.addAttribute(.foregroundColor, value: accent,
-                                         range: NSRange(location: lineRange.location + r.location,
-                                                        length: r.length))
-                }
-                for r in Coordinator.tokenRe.ranges(line) {
-                    storage.addAttribute(.foregroundColor, value: dim,
-                                         range: NSRange(location: lineRange.location + r.location,
-                                                        length: r.length))
-                }
-                for r in Coordinator.linkRe.ranges(line) {
-                    storage.addAttribute(.foregroundColor, value: accent,
-                                         range: NSRange(location: lineRange.location + r.location,
-                                                        length: r.length))
-                }
-                let at = { (r: NSRange) in
-                    NSRange(location: lineRange.location + r.location, length: r.length)
-                }
-                if Coordinator.quoteLineRe.matches(line) {
-                    storage.addAttributes([
-                        .foregroundColor: base.withAlphaComponent(0.6),
-                        .obliqueness: 0.18, // Menlo has no true italic face — synthesized slant
-                    ], range: lineRange)
-                }
-                for r in Coordinator.boldRe.ranges(line) {
-                    storage.addAttribute(.font, value: NativeNoteEditor.monoFont(bold: true),
-                                         range: at(r))
-                }
-                for r in Coordinator.emRe.ranges(line) {
-                    storage.addAttribute(.obliqueness, value: 0.18, range: at(r))
-                }
-                for r in Coordinator.strikeSpanRe.ranges(line) {
-                    storage.addAttribute(.strikethroughStyle,
-                                         value: NSUnderlineStyle.single.rawValue, range: at(r))
-                }
-                for r in Coordinator.codeSpanRe.ranges(line) {
-                    storage.addAttributes([
-                        .foregroundColor: base.withAlphaComponent(0.85),
-                        .backgroundColor: base.withAlphaComponent(0.07),
-                    ], range: at(r))
+                for (r, attrs) in MarkdownHighlight.lineSpans(line, base: base, accent: accent) {
+                    storage.addAttributes(attrs, range: NSRange(location: lineRange.location + r.location,
+                                                                length: r.length))
                 }
             }
             storage.endEditing()
         }
-    }
-}
-
-/// Tiny NSRegularExpression wrapper for the highlighter (anchors evaluated per line).
-private struct Re2 {
-    let rx: NSRegularExpression
-    init(_ pattern: String) {
-        // Compile-time literals, exercised by every highlight pass.
-        // swiftlint:disable:next force_try
-        rx = try! NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
-    }
-
-    func matches(_ s: String) -> Bool {
-        rx.firstMatch(in: s, range: NSRange(location: 0, length: (s as NSString).length)) != nil
-    }
-
-    func ranges(_ s: String) -> [NSRange] {
-        rx.matches(in: s, range: NSRange(location: 0, length: (s as NSString).length))
-            .map(\.range)
     }
 }

@@ -196,6 +196,7 @@ public struct NativeDashPanel: View {
     private static let doneShow = 10
 
     @State private var rowFrames = TodoRowFrameStore() // rows report their frames here
+    @State private var editingRow: String? // anchor of the row swapped for the inline editor
 
     /// The panel root's named coordinate space — row frames and the right-click layer's local
     /// points share it, so scrolled positions stay correct by construction.
@@ -313,6 +314,9 @@ public struct NativeDashPanel: View {
     private func rowMenuActions() -> TodoRowMenuActions {
         var a = TodoRowMenuActions()
         a.toggle = { t in toggle(t) }
+        // Edit: swap the row for the inline markdown line editor (macOS right-click only, so
+        // the read-only phone never reaches it). Commit rewrites the rest of the source line.
+        a.edit = { t in editingRow = Self.anchor(t) }
         a.openTodo = { t in openRow(t) }
         a.setColor = { t, c in rewrite(t, adopt: true) { TodoIndex.setColorToken($0, line: $1, color: c) } }
         // Pin/Unpin do NOT adopt: the movement into/out of the Pinned section IS the feedback
@@ -508,7 +512,16 @@ public struct NativeDashPanel: View {
             toggle: { self.toggle($0) },
             open: { self.openRow($0) },
             fold: { self.toggleFold($0) },
-            foldAndCenter: { t in self.foldAndCenter(t, proxy: proxy) }
+            foldAndCenter: { t in self.foldAndCenter(t, proxy: proxy) },
+            editing: editingRow,
+            endEdit: { t, rest in
+                if let rest {
+                    // Our own write: adopt the stamp so the frozen structure keeps the row in
+                    // place (the checkbox-toggle rule) while the live lookup restyles it.
+                    self.rewrite(t, adopt: true) { TodoIndex.replaceTodoRest($0, line: $1, rest: rest) }
+                }
+                self.editingRow = nil
+            }
         )
         VStack(alignment: .leading, spacing: 5) {
             SectionHeader(title: s.title, count: s.items.count,
@@ -947,15 +960,19 @@ private struct TodoSubtree: View {
         let open: (ParsedTodo) -> Void
         let fold: (ParsedTodo) -> Void
         let foldAndCenter: (ParsedTodo) -> Void
+        let editing: String? // anchor of the row swapped for the inline editor (nil = none)
+        let endEdit: (ParsedTodo, String?) -> Void // edited rest to commit, nil = cancel
 
         init(today: String, ownNoteKey: String, theme: Theme, live: [String: ParsedTodo],
              nav: NativeDashNavModel?, frames: TodoRowFrameStore,
              toggle: @escaping (ParsedTodo) -> Void, open: @escaping (ParsedTodo) -> Void,
-             fold: @escaping (ParsedTodo) -> Void, foldAndCenter: @escaping (ParsedTodo) -> Void) {
+             fold: @escaping (ParsedTodo) -> Void, foldAndCenter: @escaping (ParsedTodo) -> Void,
+             editing: String? = nil, endEdit: @escaping (ParsedTodo, String?) -> Void = { _, _ in }) {
             self.today = today; self.ownNoteKey = ownNoteKey; self.theme = theme
             self.live = live; self.nav = nav; self.frames = frames
             self.toggle = toggle; self.open = open; self.fold = fold
             self.foldAndCenter = foldAndCenter
+            self.editing = editing; self.endEdit = endEdit
         }
     }
 
@@ -970,17 +987,18 @@ private struct TodoSubtree: View {
             $0.active && $0.currentRow.map(NativeDashPanel.anchor) == NativeDashPanel.anchor(t)
         } ?? false
         VStack(alignment: .leading, spacing: 0) {
-            TodoRow(todo: t, today: ctx.today, ownNoteKey: ctx.ownNoteKey, theme: ctx.theme,
-                    focused: focused, foldable: node.item.foldable, folded: node.item.folded,
-                    hiddenSubs: node.item.hidden,
-                    onToggle: { ctx.toggle(t) },
-                    onOpen: { ctx.open(t) },
-                    onFold: { ctx.fold(t) })
-                .id(NativeDashPanel.anchor(t))
-                // Layout-driven frame reporting for the right-click layer: the row's rect in
-                // the PANEL-ROOT space (scroll-correct — the GeometryReader re-reads on scroll).
-                .background(RowFrameReporter(anchor: NativeDashPanel.anchor(t), todo: t,
-                                             frames: ctx.frames))
+            #if os(macOS)
+                // Right-click ▸ Edit swapped this row for the inline markdown line editor —
+                // the row's content becomes the full-row input box until commit/cancel.
+                if ctx.editing == NativeDashPanel.anchor(t) {
+                    TodoRowEditor(todo: t, theme: ctx.theme) { ctx.endEdit(t, $0) }
+                        .id(NativeDashPanel.anchor(t))
+                } else {
+                    plainRow(t, focused: focused)
+                }
+            #else
+                plainRow(t, focused: focused)
+            #endif
             if !node.children.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(node.children.indices, id: \.self) { i in
@@ -1009,6 +1027,21 @@ private struct TodoSubtree: View {
                 .padding(.bottom, 7) // stop just short of the last child's bottom padding
             }
         }
+    }
+
+    /// The normal (non-editing) row: TodoRow + its frame report for the right-click layer.
+    private func plainRow(_ t: ParsedTodo, focused: Bool) -> some View {
+        TodoRow(todo: t, today: ctx.today, ownNoteKey: ctx.ownNoteKey, theme: ctx.theme,
+                focused: focused, foldable: node.item.foldable, folded: node.item.folded,
+                hiddenSubs: node.item.hidden,
+                onToggle: { ctx.toggle(t) },
+                onOpen: { ctx.open(t) },
+                onFold: { ctx.fold(t) })
+            .id(NativeDashPanel.anchor(t))
+            // Layout-driven frame reporting for the right-click layer: the row's rect in
+            // the PANEL-ROOT space (scroll-correct — the GeometryReader re-reads on scroll).
+            .background(RowFrameReporter(anchor: NativeDashPanel.anchor(t), todo: t,
+                                         frames: ctx.frames))
     }
 }
 

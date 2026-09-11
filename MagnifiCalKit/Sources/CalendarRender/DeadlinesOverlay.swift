@@ -231,9 +231,14 @@ public struct DeadlinesOverlay: View {
                 let flip = input.z <= 2 && topId != nil && topId != s.id && topLine
                     .map { s.info.rect(onLeft: base).intersects($0) } == true
                 let onLeft = flip ? !base : base
-                let rect = s.info.rect(onLeft: onLeft)
+                // Edge morph (scroll-driven): as the line nears a viewport edge the pill shrinks
+                // toward the mini edge tag's size/shape, so the handoff to MiniDeadlinePill at
+                // the crossing is seamless (deadlineLabelMorphRect's rect == the pinned mini's).
+                let (rect, p) = deadlineLabelMorphRect(info: s.info, onLeft: onLeft,
+                                                       tlTop: tl.tlTop, tlBottom: tl.tlBottom)
                 DeadlinePill(title: s.info.title, timeLine: s.info.timeLine, color: theme.eventBorder(s.color),
-                             activation: a, onLeft: onLeft, width: rect.width, height: rect.height, theme: theme)
+                             activation: a, onLeft: onLeft, width: rect.width, height: rect.height,
+                             morph: p, theme: theme)
                     .opacity(s.fade)
                     .position(x: rect.midX, y: rect.midY)
                     .zIndex(a.z) // hovered/selected label rises above overlapping neighbors
@@ -263,14 +268,18 @@ private struct DeadlinePill: View {
     let onLeft: Bool // pill sits left of the column → caret/border on its RIGHT edge (points in)
     let width: CGFloat
     let height: CGFloat
+    var morph: CGFloat = 0 // big→mini edge-morph progress (scroll-driven; see edgeLabelMorph)
     let theme: Theme
     var body: some View {
-        let r: CGFloat = 10
+        // Morphing toward the edge: radius and caret interpolate to the mini tag's metrics and
+        // the text fades out, so at morph 1 this pill is pixel-identical to MiniDeadlinePill.
+        let r: CGFloat = lerp(10, DeadlineEdgeLabel.radius, morph)
         let shape = RoundedRectangle(cornerRadius: r)
         VStack(alignment: .leading, spacing: -1) {
             Text(title).font(.custom(BandStyle.titleFontName, size: 12)).foregroundStyle(theme.text).lineLimit(1)
             Text(timeLine).font(.system(size: 10, weight: .semibold)).foregroundStyle(color).lineLimit(1)
         }
+        .opacity(Double((1 - morph) * (1 - morph))) // content fades early in the shrink
         .padding(.horizontal, 7).padding(.vertical, 3)
         .frame(width: width, height: height, alignment: .leading)
         // Opaque base UNDER the frosted glass (like the event stickers) so the label reads as a solid
@@ -281,6 +290,7 @@ private struct DeadlinePill: View {
                 Color.clear.glassEffectCompat(.regular.tint(color.opacity(activation.tint * theme.eventTintScale)), in: shape)
             }
         }
+        .clipShape(shape) // shrinking frame: the fading text must not spill past the pill
         // Edge accent (border + caret) on the line-facing side; the other side stays collapsed. On a
         // flip the old caret retracts into the pill edge while the new one grows from the opposite side.
         .overlay { sideEdge(pointsRight: true, shown: onLeft, r: r) }
@@ -293,10 +303,10 @@ private struct DeadlinePill: View {
         ZStack {
             SideBorder(pointsRight: pointsRight, radius: r).strokeBorder(color, lineWidth: 1)
             Caret(pointsRight: pointsRight).fill(color)
-                .frame(width: 6, height: 11)
+                .frame(width: lerp(6, 4, morph), height: lerp(11, 8, morph)) // → the mini's caret
                 .scaleEffect(x: shown ? 1 : 0, anchor: pointsRight ? .leading : .trailing) // grow/retract at the edge
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: pointsRight ? .trailing : .leading)
-                .offset(x: pointsRight ? 6 : -6)
+                .offset(x: pointsRight ? lerp(6, 4, morph) : -lerp(6, 4, morph))
         }
         .opacity(shown ? 1 : 0)
     }

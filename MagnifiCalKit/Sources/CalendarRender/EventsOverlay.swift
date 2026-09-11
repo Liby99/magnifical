@@ -373,28 +373,46 @@ public struct TimeTagsOverlay: View {
 
     @ViewBuilder private func nowLabelView(_ spec: NowLabelSpec) -> some View {
         let red = theme.nowLine
-        let shape = RoundedRectangle(cornerRadius: 10) // match the deadline pill's radius
+        // Edge morph (scroll-driven, see edgeLabelMorph): the geometry already shrank
+        // spec.rect toward the mini tag's size; here the CONTENT cross-fades — the full
+        // CURRENT TIME stack out, a mini-styled "now" in — and radius/caret interpolate, so
+        // at the viewport edge this view is pixel-identical to miniNowTagView's pinned tag.
+        let p = spec.morph
+        let shape = RoundedRectangle(cornerRadius: lerp(10, 6, p)) // full pill 10 → mini 6
         // Dark mode: dark base + strong red glass, white label. Light mode: a bright frosted
         // base with only a faint red tint, and a dark label — the time stays red in both.
         let labelColor: Color = theme.dark ? .white.opacity(0.7) : theme.text.opacity(0.7)
         let baseFill: Color = (theme.dark ? Color.black : Color.white).opacity(theme.dark ? 0.55 : 0.62)
         let glassTint = red.opacity(theme.dark ? 0.5 : 0.14)
-        VStack(alignment: spec.pointsRight ? .trailing : .leading, spacing: -1) {
-            Text("CURRENT TIME").font(.system(size: 7.5, weight: .semibold)).foregroundStyle(labelColor)
-            Text(spec.text).font(.system(size: 13, weight: .bold)).foregroundStyle(red) // time in the accent color
-            if let alt = spec.altText { // alt-tz wall clock, e.g. "13:45 (PST)"
-                Text(alt).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(labelColor).padding(.top, 1.5)
+        ZStack {
+            VStack(alignment: spec.pointsRight ? .trailing : .leading, spacing: -1) {
+                Text("CURRENT TIME").font(.system(size: 7.5, weight: .semibold)).foregroundStyle(labelColor)
+                Text(spec.text).font(.system(size: 13, weight: .bold)).foregroundStyle(red) // accent-colored time
+                if let alt = spec.altText { // alt-tz wall clock, e.g. "13:45 (PST)"
+                    Text(alt).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(labelColor)
+                        .padding(.top, 1.5)
+                }
+            }
+            .padding(.horizontal, 7).padding(.vertical, 3) // match the deadline pill's padding
+            .frame(width: spec.rect.width, height: spec.rect.height,
+                   alignment: spec.pointsRight ? .trailing : .leading)
+            .opacity(Double((1 - p) * (1 - p))) // full content fades out early in the shrink
+            if p > 0 { // the mini "now" fades in — identical styling to miniNowTagView
+                Text("now")
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(red)
+                    .fixedSize()
+                    .opacity(Double(p * p))
             }
         }
-        .padding(.horizontal, 7).padding(.vertical, 3) // match the deadline pill's padding
-        .frame(width: spec.rect.width, height: spec.rect.height, alignment: spec.pointsRight ? .trailing : .leading)
+        .frame(width: spec.rect.width, height: spec.rect.height)
         .background(shape.fill(baseFill)) // solid base so the frost reads clean
+        .clipShape(shape) // shrinking frame: the fading full stack must not spill past the pill
         .glassEffectCompat(.regular.tint(glassTint), in: shape)
         .overlay(shape.strokeBorder(red, lineWidth: 1)) // fully wrapped border
         // Caret on the line-facing edge; on a side flip (e.g. week↔day) the old one retracts and the
         // new one grows, so the label slides across smoothly instead of jumping.
-        .overlay { flipCaret(pointsRight: true, shown: spec.pointsRight, color: red, h: 9) }
-        .overlay { flipCaret(pointsRight: false, shown: !spec.pointsRight, color: red, h: 9) }
+        .overlay { flipCaret(pointsRight: true, shown: spec.pointsRight, color: red, h: lerp(9, 6, p)) }
+        .overlay { flipCaret(pointsRight: false, shown: !spec.pointsRight, color: red, h: lerp(9, 6, p)) }
         .opacity(spec.opacity)
         .position(x: spec.rect.midX, y: spec.rect.midY + 1) // nudge the whole label + caret down 1px
         .animation(.easeInOut(duration: 0.2), value: spec.pointsRight) // slide + caret-swap on flip

@@ -116,6 +116,10 @@ public enum Layout {
     public static let edgeIndicatorMorph: CGFloat = 14
     /// At most this many indicators per edge; deeper events hide behind the outermost.
     public static let edgeIndicatorMax = 3
+    /// Scroll distance (px before the line reaches the viewport edge) over which a timeline
+    /// LABEL (the CURRENT TIME pill / a deadline label) morphs into its edge mini tag — the
+    /// same purely scroll-driven, piecewise-linear philosophy as the event edge cards.
+    public static let edgeLabelMorph: CGFloat = 28
 
     /// Day-view split fraction (timeline width ÷ content width) drag bounds: neither the
     /// timeline nor the dashboard may collapse.

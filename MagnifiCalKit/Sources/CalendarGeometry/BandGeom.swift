@@ -200,6 +200,32 @@ public enum DeadlineEdgeLabel {
     public static let radius: CGFloat = 5
 }
 
+/// Edge-morph progress for a timeline label whose line sits at `y`: 0 at rest (edgeLabelMorph
+/// px or more inside the viewport), rising linearly to 1 as the line reaches the top/bottom
+/// edge — so the big label shrinks CONTINUOUSLY into its edge mini tag while scrolling, and at
+/// the crossing the two are geometrically identical (seamless handoff). Purely scroll-driven,
+/// like the event edge cards — never a timed animation.
+public func edgeLabelMorph(y: CGFloat, tlTop: CGFloat, tlBottom: CGFloat) -> CGFloat {
+    let t = Layout.edgeLabelMorph
+    return max(clamp((tlTop + t - y) / t, 0, 1), clamp((y - (tlBottom - t)) / t, 0, 1))
+}
+
+/// A deadline label's scroll-morphed pill: the full content-flexed rect (p = 0) shrinking
+/// linearly to the edge mini size as its line nears a viewport edge, anchored at the
+/// caret-side edge (the side facing the line stays put; the pill collapses toward it).
+/// At p = 1 this rect coincides with deadlineEdgeLabel's pinned mini rect (± the 1px inset).
+public func deadlineLabelMorphRect(info: DeadlineLabelInfo, onLeft: Bool,
+                                   tlTop: CGFloat, tlBottom: CGFloat) -> (rect: CGRect, p: CGFloat) {
+    let p = edgeLabelMorph(y: info.lineY, tlTop: tlTop, tlBottom: tlBottom)
+    if p <= 0 {
+        return (info.rect(onLeft: onLeft), 0)
+    }
+    let W = lerp(info.width, DeadlineEdgeLabel.width, p)
+    let H = lerp(info.height, DeadlineEdgeLabel.height, p)
+    let left = onLeft ? info.lineX - DeadlineLabel.gap - W : info.lineX + info.colW + DeadlineLabel.gap
+    return (CGRect(x: left, y: info.lineY - H / 2, width: W, height: H), p)
+}
+
 /// The edge indicator's mini-pill placement for an OFF-VIEWPORT deadline: fixed
 /// DeadlineEdgeLabel size beside the edge line, same side rule as the full label. nil while
 /// the deadline is on-screen. ONE source of truth: the overlay renders this rect and the

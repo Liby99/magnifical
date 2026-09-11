@@ -35,6 +35,65 @@ final class NowEdgeTests: XCTestCase {
         XCTAssertEqual(item(g, "now-w-edgetag")?.opacity ?? 0, 0, "no edge tag while on-screen")
     }
 
+    func testNowLabelMorphsContinuouslyIntoMiniTag() throws {
+        // The big CURRENT TIME pill must shrink CONTINUOUSLY toward the mini tag as the line
+        // nears the edge, and be geometrically identical to the pinned mini at the crossing.
+        let now = earlyMorningNow()
+        let g0 = input(now: now, tlScroll: 0)
+        let f = frameFor(g0.focus, g0)
+        let tlTop = f.bandY + 4 * f.trackH + 18
+        let m = hourMetrics(tlTop, Layout.tlBottomY(vp.h), g0.z, 0, g0.weekHourH)
+        let nowFrac: CGFloat = 4 // earlyMorningNow is 04:00
+        let T = Layout.edgeLabelMorph
+
+        // Midpoint: line T/2 above the edge → half-morphed size, still centered on the line.
+        let gMid = input(now: now, tlScroll: nowFrac * m.hourH - T / 2)
+        let mid = try XCTUnwrap(item(gMid, "nl-w"))
+        XCTAssertEqual(mid.morph, 0.5, accuracy: 0.01)
+        XCTAssertEqual(mid.w, lerp(88, 44, 0.5), accuracy: 0.1)
+        XCTAssertEqual(mid.h, lerp(36, 17, 0.5), accuracy: 0.1)
+
+        // Just inside the edge: the shrunken big pill ≈ the pinned mini tag (seamless handoff).
+        let gEdge = input(now: now, tlScroll: nowFrac * m.hourH - 0.25)
+        let big = try XCTUnwrap(item(gEdge, "nl-w"))
+        XCTAssertGreaterThan(big.opacity, 0.5, "still the big item — line is (just) on-screen")
+        XCTAssertEqual(big.morph, 1, accuracy: 0.02)
+        // The pinned mini tag it will hand off to, one scroll-tick later:
+        let gOut = input(now: now, tlScroll: nowFrac * m.hourH + 2)
+        let mini = try XCTUnwrap(item(gOut, "now-w-edgetag"))
+        XCTAssertEqual(big.w, mini.w, accuracy: 0.5, "same width at the crossing")
+        XCTAssertEqual(big.h, mini.h, accuracy: 0.5, "same height at the crossing")
+        XCTAssertEqual(big.x, mini.x, accuracy: 0.5, "same anchor at the crossing")
+        XCTAssertEqual(big.rect.midY, mini.rect.midY, accuracy: 1.5, "same center at the crossing")
+    }
+
+    func testDeadlineLabelMorphMatchesMiniAtBoundary() throws {
+        // Same continuity for deadline labels: at the viewport edge the morphed full pill's
+        // rect coincides with deadlineEdgeLabel's pinned mini rect.
+        let g0 = input(now: earlyMorningNow(), tlScroll: 0)
+        let f = frameFor(g0.focus, g0)
+        let tlTop = f.bandY + 4 * f.trackH + 18
+        let tlBottom = Layout.tlBottomY(vp.h)
+        let m = hourMetrics(tlTop, tlBottom, g0.z, 0, g0.weekHourH)
+        let d = Deadline(id: "d", year: g0.year, month: g0.focus, day: 2, hour: 4,
+                         title: "A fairly long deadline title", color: "red")
+        // Line 0.02px inside the top edge → morph ≈ 1 (a long title sheds ~5px of width per
+        // remaining morph percent, so probe right at the crossing).
+        let g = input(now: earlyMorningNow(), tlScroll: 4 * m.hourH - 0.02)
+        let pos = try XCTUnwrap(deadlinePos(d, g))
+        let info = deadlineLabelInfo(d, lineX: pos.x, lineY: pos.y, colW: pos.w, g)
+        let (rect, p) = deadlineLabelMorphRect(info: info, onLeft: info.defaultOnLeft,
+                                               tlTop: tlTop, tlBottom: tlBottom)
+        XCTAssertEqual(p, 1, accuracy: 0.02)
+        // One tick later the line is out; the pinned mini must sit where the morph ended.
+        let gOut = input(now: earlyMorningNow(), tlScroll: 4 * m.hourH + 2)
+        let mini = try XCTUnwrap(deadlineEdgeLabel(d, gOut))
+        XCTAssertEqual(rect.width, mini.rect.width, accuracy: 0.5)
+        XCTAssertEqual(rect.height, mini.rect.height, accuracy: 0.5)
+        XCTAssertEqual(rect.minX, mini.rect.minX, accuracy: 0.5)
+        XCTAssertEqual(rect.midY, mini.rect.midY, accuracy: 1.5)
+    }
+
     func testScrolledOutNowClampsToTopEdge() throws {
         let g = input(now: earlyMorningNow(), tlScroll: 700) // late window → 04:00 exits the TOP
         XCTAssertEqual(item(g, "now-w")?.opacity ?? 0, 0, "the real now-line is off-screen")

@@ -19,6 +19,8 @@ import SwiftUI
 /// (`openTodo`), and Delete through the window-level confirm chain.
 public struct TodoRowMenuActions {
     public var toggle: (ParsedTodo) -> Void = { _ in }
+    /// Inline row edit (TODO panel only for now) — nil hides the Edit row entirely.
+    public var edit: ((ParsedTodo) -> Void)?
     public var openTodo: (ParsedTodo) -> Void = { _ in }
     public var setColor: (ParsedTodo, String) -> Void = { _, _ in }
     public var pin: (ParsedTodo) -> Void = { _ in }
@@ -97,6 +99,9 @@ public struct TodoRowCallout: View {
             Divider().padding(.bottom, 3)
             row("Check", icon: "checkmark.square", disabled: done) { actions.toggle(todo) }
             row("Uncheck", icon: "square", disabled: !done) { actions.toggle(todo) }
+            if let edit = actions.edit {
+                row("Edit", icon: "pencil") { edit(todo) }
+            }
             row("Copy", icon: "doc.on.doc") {
                 #if os(macOS)
                     NSPasteboard.general.clearContents()

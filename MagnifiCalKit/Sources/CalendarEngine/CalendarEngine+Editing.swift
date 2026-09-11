@@ -465,10 +465,13 @@ extension CalendarEngine {
         var hit: String?
         for d in dls {
             guard let pos = deadlinePos(d, g) else { continue }
-            // Hit the LABEL pill (at its base side) or the moment line itself.
+            // Hit the LABEL pill (at its base side, edge-morph applied — near the viewport edge
+            // the drawn pill is smaller than the full rect) or the moment line itself.
             let onLine = p.x >= pos.x && p.x <= pos.x + pos.w && abs(p.y - pos.y) < 8
             let info = deadlineLabelInfo(d, lineX: pos.x, lineY: pos.y, colW: pos.w, g)
-            if info.rect(onLeft: sides[d.id] ?? info.defaultOnLeft).contains(p) || onLine {
+            let rect = deadlineLabelMorphRect(info: info, onLeft: sides[d.id] ?? info.defaultOnLeft,
+                                              tlTop: tl.tlTop, tlBottom: tl.tlBottom).rect
+            if rect.contains(p) || onLine {
                 hit = d.id
             }
         }
