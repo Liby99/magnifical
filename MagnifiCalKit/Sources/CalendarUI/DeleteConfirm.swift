@@ -98,6 +98,7 @@ struct BatchDeleteDialog: View {
 /// Cancel / Delete — BatchDeleteDialog's exact card recipe (scrim, glass card, capsule buttons).
 struct TodoDeleteDialog: View {
     let text: String
+    var source: String? = nil // names the note/event the line will be removed from
     let theme: Theme
     var onDelete: () -> Void
     var onCancel: () -> Void
@@ -109,6 +110,10 @@ struct TodoDeleteDialog: View {
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Text(text).font(.system(size: 12)).foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                if let source {
+                    Text("from \(source)").font(.system(size: 11)).foregroundStyle(theme.textMuted.opacity(0.8))
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 12) {
                     DeleteDialogButton(label: "Cancel", destructive: false, focused: false, theme: theme) { onCancel() }
                     DeleteDialogButton(label: "Delete", destructive: true, focused: true, theme: theme) { onDelete() }
@@ -364,7 +369,7 @@ struct ModalOverlays: ViewModifier {
             // PROJ row-menu Delete confirm — window-level (full-window blur), same glass card.
             .overlay {
                 if let td = ui.pendingTodoDelete {
-                    TodoDeleteDialog(text: td.text, theme: theme,
+                    TodoDeleteDialog(text: td.text, source: td.source, theme: theme,
                                      onDelete: {
                                          td.confirm()
                                          ui.pendingTodoDelete = nil

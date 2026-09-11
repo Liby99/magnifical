@@ -157,10 +157,13 @@ extension CalendarEngine {
     }
 
     /// The OFF-VIEWPORT deadline whose edge mini pill is under `p` (nil while on-screen — the
-    /// pill and deadlinePos are mutually exclusive). Same source list as deadlineAt.
+    /// pill and deadlinePos are mutually exclusive). Same source list as deadlineAt, and the
+    /// same base side as the drawn pill (offline assignment) so the hit region matches it.
     func deadlineEdgeTagAt(_ p: CGPoint, _ g: SceneInput) -> Deadline? {
-        displayDeadlines(for: year).first { d in
-            deadlineEdgeLabel(d, g).map { $0.rect.insetBy(dx: -2, dy: -2).contains(p) } == true
+        let sides = deadlineSides()
+        return displayDeadlines(for: year).first { d in
+            deadlineEdgeLabel(d, g, onLeft: sides[d.id])
+                .map { $0.rect.insetBy(dx: -2, dy: -2).contains(p) } == true
         }
     }
 

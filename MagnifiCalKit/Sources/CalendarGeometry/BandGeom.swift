@@ -227,17 +227,22 @@ public func deadlineLabelMorphRect(info: DeadlineLabelInfo, onLeft: Bool,
 }
 
 /// The edge indicator's mini-pill placement for an OFF-VIEWPORT deadline: fixed
-/// DeadlineEdgeLabel size beside the edge line, same side rule as the full label. nil while
-/// the deadline is on-screen. ONE source of truth: the overlay renders this rect and the
-/// pointer hit-tests it (a click glides the timeline to center the deadline's hour).
+/// DeadlineEdgeLabel size beside the edge line. nil while the deadline is on-screen. ONE
+/// source of truth: the overlay renders this rect and the pointer hit-tests it (a click
+/// glides the timeline to center the deadline's hour).
+/// `onLeft` MUST carry the full label's base side (the offline `deadlineSides()` entry) when
+/// one exists — the mini falling back to the default geometric rule while the full pill sat
+/// on its solver-assigned side made the tag JUMP sides at the big↔mini handoff. nil (no
+/// solver entry — the deadline was off-screen at solve time) → the default rule, which is
+/// also what the full pill falls back to: the two stay consistent in every scroll state.
 public func deadlineEdgeLabel(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
-                              anim: PageAnim? = nil) -> (rect: CGRect, onLeft: Bool)? {
+                              anim: PageAnim? = nil, onLeft: Bool? = nil) -> (rect: CGRect, onLeft: Bool)? {
     guard let ep = deadlineEdgePos(d, g, focus: focus, anim: anim) else { return nil }
-    let onLeft = g.z > 2 || (ep.x + ep.w / 2 >= (Layout.labelW + g.vp.w) / 2)
+    let left = onLeft ?? (g.z > 2 || (ep.x + ep.w / 2 >= (Layout.labelW + g.vp.w) / 2))
     let W = DeadlineEdgeLabel.width
-    let left = onLeft ? ep.x - DeadlineLabel.gap - W : ep.x + ep.w + DeadlineLabel.gap
-    return (CGRect(x: left, y: ep.y - DeadlineEdgeLabel.height / 2,
-                   width: W, height: DeadlineEdgeLabel.height), onLeft)
+    let x = left ? ep.x - DeadlineLabel.gap - W : ep.x + ep.w + DeadlineLabel.gap
+    return (CGRect(x: x, y: ep.y - DeadlineEdgeLabel.height / 2,
+                   width: W, height: DeadlineEdgeLabel.height), left)
 }
 
 /// ── Deadline side-label placement (shared by the SwiftUI pill AND the pointer hit-test) ─────

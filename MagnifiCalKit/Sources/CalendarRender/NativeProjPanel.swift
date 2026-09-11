@@ -22,9 +22,10 @@ public struct NativeProjPanel: View {
     let theme: Theme
     var onOpen: (String, Int?, String?) -> Void
     var onJump: (String, Int?) -> Void = { _, _ in }
-    /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
-    /// — the confirm's blur must cover the WHOLE window, not just this panel.
-    var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    /// Row-menu Delete: publish (item text, source label, confirm action) up to the
+    /// window-level dialog host — the confirm's blur must cover the WHOLE window, not just
+    /// this panel.
+    var onDeleteRequest: (String, String?, @escaping () -> Void) -> Void = { _, _, _ in }
     /// Row right-click → publish the callout request UP to the window root (see
     /// NativeDashPanel.onRowMenu — presenting the popover from inside the carousel live-locked).
     var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }
@@ -34,7 +35,7 @@ public struct NativeProjPanel: View {
     public init(engine: CalendarEngine, scope: String, key: String, theme: Theme,
                 onOpen: @escaping (String, Int?, String?) -> Void,
                 onJump: @escaping (String, Int?) -> Void = { _, _ in },
-                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in },
+                onDeleteRequest: @escaping (String, String?, @escaping () -> Void) -> Void = { _, _, _ in },
                 onRowMenu: @escaping (TodoRowMenuRequest) -> Void = { _ in }) {
         self.engine = engine
         self.scope = scope
@@ -163,7 +164,7 @@ public struct NativeProjPanel: View {
         a.clearPriority = { t in rewrite(t, adopt: true) { TodoIndex.removePriority($0, line: $1) } }
         a.hide = { t in rewrite(t, adopt: false) { TodoIndex.addTag($0, line: $1, tag: "proj-hide") } }
         a.delete = { t in // window-level confirm dialog first; the closure is the yes-path
-            onDeleteRequest(t.text) { confirmDelete(t) }
+            onDeleteRequest(t.text, NativeDashPanel.sourceLabel(t)) { confirmDelete(t) }
         }
         return a
     }

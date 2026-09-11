@@ -23,7 +23,7 @@ struct NativePanelHost: View, Equatable {
     var onOpen: (String, Int?, String?) -> Void
     var onJump: (String, Int?) -> Void = { _, _ in }
     /// TODO/PROJ row-menu Delete → the window-level confirm dialog (CalendarView hosts it).
-    var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    var onDeleteRequest: (String, String?, @escaping () -> Void) -> Void = { _, _, _ in }
     /// TODO/PROJ row right-click → the window-level callout popover (CalendarView presents it
     /// from stable content; presenting inside the carousel live-locked — see NativeDashPanel).
     var onRowMenu: (TodoRowMenuRequest) -> Void = { _ in }

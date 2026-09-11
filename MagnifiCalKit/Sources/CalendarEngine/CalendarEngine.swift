@@ -1040,6 +1040,19 @@ public final class CalendarEngine {
         commitTxn()
     }
 
+    /// Open an undo group across an ASYNC user flow — the ⇧/⌘Enter placeholder row: insert
+    /// now, close when its editor ends. Committing the edit lands insert + text as ONE entry;
+    /// canceling removes the row first, so the state matches the open snapshot and the group
+    /// commits to NOTHING (no-op transactions drop — no undo residue). Balance every open with
+    /// one close (undoableEdit's commit also closes an open group).
+    public func openUndoGroup() {
+        beginTxn()
+    }
+
+    public func closeUndoGroup() {
+        commitTxn()
+    }
+
     public var canUndo: Bool {
         !undoStack.isEmpty || pendingUndo != nil
     }

@@ -15,13 +15,14 @@
     struct TodoRowEditor: View {
         let todo: ParsedTodo
         let theme: Theme
+        var preselect: String? = nil // select this PREFIX on open (placeholder flows) instead of caret-at-end
         /// Called exactly once: the edited rest (trimmed) to commit, or nil to cancel.
         let onFinish: (String?) -> Void
 
         var body: some View {
             let parts = TodoIndex.taskLineParts(todo.raw)
             TodoLineEditor(head: parts?.head ?? "- [ ] ", initial: parts?.rest ?? todo.raw,
-                           theme: theme, onFinish: onFinish)
+                           theme: theme, preselect: preselect, onFinish: onFinish)
                 .frame(height: 25)
                 .background(RoundedRectangle(cornerRadius: 6).fill(theme.bg))
                 .overlay(RoundedRectangle(cornerRadius: 6)
@@ -34,6 +35,7 @@
         let head: String // the immutable "- [ ] " prefix, for virtual-line highlighting only
         let initial: String // the editable rest, seeded into the field
         let theme: Theme
+        var preselect: String? = nil // select this prefix of `initial` on focus (else caret at end)
         let onFinish: (String?) -> Void
 
         func makeCoordinator() -> Coordinator {
@@ -85,10 +87,16 @@
             sv.hasHorizontalScroller = false
             sv.verticalScrollElasticity = .none
 
-            // Grab the keyboard once mounted; caret at the end (an edit usually appends).
+            // Grab the keyboard once mounted. A placeholder flow (⇧Enter sub-item) SELECTS the
+            // placeholder so typing replaces it; a plain edit puts the caret at the end.
+            let pre = preselect
             DispatchQueue.main.async {
                 tv.window?.makeFirstResponder(tv)
-                tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+                if let pre, tv.string.hasPrefix(pre) {
+                    tv.setSelectedRange(NSRange(location: 0, length: (pre as NSString).length))
+                } else {
+                    tv.setSelectedRange(NSRange(location: (tv.string as NSString).length, length: 0))
+                }
             }
             return sv
         }

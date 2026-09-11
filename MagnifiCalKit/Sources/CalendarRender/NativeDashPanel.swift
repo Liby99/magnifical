@@ -157,9 +157,10 @@ public struct NativeDashPanel: View {
     var nav: NativeDashNavModel? // keyboard row cursor (⌘B focus / arrows / Space / Enter)
     var onOpen: (String, Int?, String?) -> Void // event row → drawer (id, note line, occurrence key)
     var onJump: (String, Int?) -> Void = { _, _ in } // note todo row → fly to its note (storage key)
-    /// Row-menu Delete: publish (item text, confirm action) up to the window-level dialog host
-    /// — the confirm's blur must cover the WHOLE window, not just this panel.
-    var onDeleteRequest: (String, @escaping () -> Void) -> Void = { _, _ in }
+    /// Row-menu / Delete-key: publish (item text, source label, confirm action) up to the
+    /// window-level dialog host — the confirm's blur must cover the WHOLE window, not just
+    /// this panel. The source label ("event “X”" / "the daily note on …") is nil for batches.
+    var onDeleteRequest: (String, String?, @escaping () -> Void) -> Void = { _, _, _ in }
     /// Row right-click → publish the callout request UP to the window root, which presents the
     /// popover from stable content. Never present it from this panel: the carousel's per-frame
     /// .position/.offset re-anchored the NSPopover every tick (AttributeGraph cycle — slow menu,
@@ -176,7 +177,7 @@ public struct NativeDashPanel: View {
                 settings: DashTodoSettings? = nil, nav: NativeDashNavModel? = nil,
                 onOpen: @escaping (String, Int?, String?) -> Void,
                 onJump: @escaping (String, Int?) -> Void = { _, _ in },
-                onDeleteRequest: @escaping (String, @escaping () -> Void) -> Void = { _, _ in },
+                onDeleteRequest: @escaping (String, String?, @escaping () -> Void) -> Void = { _, _, _ in },
                 onRowMenu: @escaping (TodoRowMenuRequest) -> Void = { _ in },
                 onReveal: ((String) -> Void)? = nil) {
         self.engine = engine
@@ -197,6 +198,8 @@ public struct NativeDashPanel: View {
 
     @State private var rowFrames = TodoRowFrameStore() // rows report their frames here
     @State private var editingRow: String? // anchor of the row swapped for the inline editor
+    @State private var editingPreselect: String? // editor opens with this PREFIX selected (⇧Enter placeholder)
+    @State private var creating: (row: String, origin: String)? // in-flight ⇧/⌘Enter creation (Esc removes row)
 
     /// The panel root's named coordinate space — row frames and the right-click layer's local
     /// points share it, so scrolled positions stay correct by construction.
@@ -261,6 +264,29 @@ public struct NativeDashPanel: View {
                 editingRow = req.anchor
             }
         }()
+        // Delete-key handshake, same single-consumer shape: the live panel owning the selected
+        // rows raises the window-level confirm dialog.
+        let _ = {
+            guard let nav, let req = nav.deleteRequest,
+                  nav.activePanel.isEmpty || nav.activePanel == scope + "|" + key,
+                  displayRows.contains(where: { req.anchors.contains(Self.anchor($0)) }) else { return }
+            DispatchQueue.main.async {
+                guard nav.deleteRequest == req else { return }
+                nav.deleteRequest = nil
+                requestDeleteSelected(req.anchors)
+            }
+        }()
+        // ⇧Enter handshake: add a sub-item under the selected row, then edit it in place.
+        let _ = {
+            guard let nav, let req = nav.subItemRequest,
+                  nav.activePanel.isEmpty || nav.activePanel == scope + "|" + key,
+                  displayRows.contains(where: { Self.anchor($0) == req.anchor }) else { return }
+            DispatchQueue.main.async {
+                guard nav.subItemRequest == req else { return }
+                nav.subItemRequest = nil
+                addSubItem(anchor: req.anchor, sibling: req.sibling)
+            }
+        }()
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
@@ -287,6 +313,17 @@ public struct NativeDashPanel: View {
                 guard let nav, nav.active, displayRows.indices.contains(c) else { return }
                 withAnimation(.easeOut(duration: 0.15)) {
                     proxy.scrollTo(Self.anchor(displayRows[c]), anchor: .center)
+                }
+            }
+            // A row entered edit mode (incl. the ⇧/⌘Enter placeholder, which may land far
+            // below a long subtree) → glide it into view. The hop lets the freshly-refrozen
+            // structure mount the new row first, so scrollTo has a real target.
+            .onChange(of: editingRow) { _, r in
+                guard let r else { return }
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(r, anchor: .center)
+                    }
                 }
             }
         }
@@ -351,11 +388,83 @@ public struct NativeDashPanel: View {
         // #proj-hide only affects the PROJECT panel — this list keeps the row, so adopt.
         a.hide = { t in rewrite(t, adopt: true) { TodoIndex.addTag($0, line: $1, tag: "proj-hide") } }
         a.delete = { t in // window-level confirm dialog first; the closure is the yes-path
-            onDeleteRequest(t.text) {
-                rewrite(t, adopt: false) { TodoIndex.removeTodoLine($0, line: $1) }
+            onDeleteRequest(t.text, Self.sourceLabel(t)) {
+                engine.undoableEdit {
+                    rewrite(t, adopt: false) { TodoIndex.removeTodoLine($0, line: $1) }
+                }
             }
         }
         return a
+    }
+
+    /// Human name of a todo's SOURCE for the delete confirm ("from …"): the owning event, or
+    /// which daily/weekly/monthly note the line lives in.
+    public static func sourceLabel(_ t: ParsedTodo) -> String {
+        if t.source == "event" {
+            return "event “\(t.eventTitle.isEmpty ? "(untitled)" : t.eventTitle)”"
+        }
+        let d = t.dailyDate ?? ""
+        if d.hasPrefix("week:") {
+            return "the weekly note of the week of \(d.dropFirst(5))"
+        }
+        if d.hasPrefix("month:") {
+            return "the monthly note of \(d.dropFirst(6))"
+        }
+        return "the daily note on \(d)"
+    }
+
+    /// ⇧Enter (child) / ⌘Enter (sibling): insert a placeholder row DIRECTLY under the selected
+    /// one — a child one indent deeper (above existing sub-items) or a sibling at the same
+    /// level — select it, and open its inline editor with the placeholder fully selected:
+    /// typing replaces it, plain Enter keeps it, Esc CANCELS the creation entirely. The undo
+    /// GROUP opened here closes when the editor ends: a commit lands insert + text as one ⌘Z
+    /// step; a cancel restores the pre-insert state, so the group commits to nothing.
+    private func addSubItem(anchor originAnchor: String, sibling: Bool) {
+        let placeholder = "work on..."
+        guard let origin = engine.todoFeed(today: Self.todayIso())
+            .first(where: { Self.anchor($0) == originAnchor }) else { return }
+        engine.openUndoGroup()
+        let stamp = Self.todayIso() + "T" + Self.clockNow()
+        // A child lands at origin.line + 1; a sibling lands BELOW the origin's whole subtree —
+        // capture the real insertion line from the note the transform actually saw.
+        var newLine = origin.line + 1
+        Self.rewriteTodoLine(engine, origin) { note, ln in
+            if sibling {
+                newLine = TodoIndex.subtreeEnd(note, line: ln) + 1
+                return TodoIndex.insertSiblingTodo(note, line: ln, text: placeholder, stamp: stamp)
+            }
+            return TodoIndex.insertSubTodo(note, line: ln, text: placeholder)
+        }
+        // A folded parent must open to show its new child (a sibling shows regardless).
+        let row = "\(TodoFeed.scopeKey(origin))\0\(newLine)"
+        if !sibling {
+            nav?.collapsedSubs.remove(originAnchor)
+        }
+        nav?.selected = [row]
+        editingRow = row
+        editingPreselect = placeholder
+        creating = (row: row, origin: originAnchor)
+        engine.wake()
+    }
+
+    /// Delete-key path: confirm-then-remove the selected rows' source lines as ONE undo entry.
+    /// A single row names its source in the dialog; several confirm as a count.
+    private func requestDeleteSelected(_ anchors: Set<String>) {
+        let todos = engine.todoFeed(today: Self.todayIso()).filter { anchors.contains(Self.anchor($0)) }
+        guard !todos.isEmpty else { return }
+        let text = todos.count == 1 ? todos[0].text : "\(todos.count) selected to-dos"
+        let source = todos.count == 1 ? Self.sourceLabel(todos[0]) : nil
+        onDeleteRequest(text, source) {
+            engine.undoableEdit {
+                // DESCENDING line order: removing a line renumbers everything below it, so
+                // same-note deletions must go bottom-up to keep the remaining anchors true.
+                for t in todos.sorted(by: { $0.line > $1.line }) {
+                    Self.rewriteTodoLine(engine, t) { TodoIndex.removeTodoLine($0, line: $1) }
+                }
+            }
+            nav?.selected.removeAll()
+            engine.wake()
+        }
     }
 
     /// A todo's soft-link identity (note scope + line) — stable across a toggle, unlike tieKey
@@ -537,17 +646,30 @@ public struct NativeDashPanel: View {
             fold: { self.toggleFold($0) },
             foldAndCenter: { t in self.foldAndCenter(t, proxy: proxy) },
             editing: editingRow,
+            editingPreselect: editingPreselect,
             endEdit: { t, rest in
+                let isCreation = creating != nil && creating?.row == editingRow
                 if let rest {
                     // ONE calendar-undo entry (⌘Z/⇧⌘Z restore the row's old text once the
                     // editor is closed; while it's open the field's native undo owns ⌘Z).
-                    // adopt: the frozen structure keeps the row in place (the checkbox rule)
-                    // while the live lookup restyles it.
+                    // A creation's still-open undo group closes through this same commit, so
+                    // insert + text land as one step. adopt: the frozen structure keeps the
+                    // row in place (the checkbox rule) while the live lookup restyles it.
                     engine.undoableEdit {
                         self.rewrite(t, adopt: true) { TodoIndex.replaceTodoRest($0, line: $1, rest: rest) }
                     }
+                } else if isCreation {
+                    // Esc on a fresh ⇧/⌘Enter row: remove it — the note returns to its
+                    // pre-insert text, the open undo group commits to NOTHING, and the
+                    // original row takes the selection back. As if nothing happened.
+                    Self.rewriteTodoLine(engine, t) { TodoIndex.removeTodoLine($0, line: $1) }
+                    engine.closeUndoGroup()
+                    nav?.selected = creating.map { [$0.origin] } ?? []
+                    engine.wake()
                 }
                 self.editingRow = nil
+                self.editingPreselect = nil
+                self.creating = nil
             },
             select: { t, shift in
                 guard !NativeDash.tapsSuppressed else { return } // pinch lift-off, not a real click
@@ -806,10 +928,19 @@ public struct NativeDashPanel: View {
 /// The right-click layer resolves the clicked row from it; VARIABLE-HEIGHT rows (subtrees) are
 /// free because every row reports its real rect.
 final class TodoRowFrameStore {
+    /// Rects are the CONTENT cluster (checkbox + text + selection indent), not the full row —
+    /// the click-away deselect must treat the empty space right of a row as empty.
     fileprivate var rows: [String: (rect: CGRect, todo: ParsedTodo)] = [:]
 
+    /// Exact content hit — the left-click test (a miss here deselects).
     fileprivate func hit(_ p: CGPoint) -> ParsedTodo? {
         rows.values.first { $0.rect.contains(p) }?.todo
+    }
+
+    /// Row-BAND hit (the content's vertical span, rightward to the panel edge) — the
+    /// right-click test, so the callout still opens anywhere along the row like before.
+    fileprivate func bandHit(_ p: CGPoint) -> ParsedTodo? {
+        rows.values.first { p.y >= $0.rect.minY && p.y <= $0.rect.maxY && p.x >= $0.rect.minX }?.todo
     }
 }
 
@@ -910,7 +1041,7 @@ private struct RowFrameReporter: View {
                                 }
                                 return e
                             }
-                            guard self.bounds.contains(p), let todo = self.frames?.hit(p) else { return e }
+                            guard self.bounds.contains(p), let todo = self.frames?.bandHit(p) else { return e }
                             self.onHit?(todo, e.locationInWindow)
                             return nil // consumed — no pass-through context menus underneath
                         }
@@ -1034,6 +1165,7 @@ private struct TodoSubtree: View {
         let fold: (ParsedTodo) -> Void
         let foldAndCenter: (ParsedTodo) -> Void
         let editing: String? // anchor of the row swapped for the inline editor (nil = none)
+        let editingPreselect: String? // editor opens with this prefix selected (⇧Enter placeholder)
         let endEdit: (ParsedTodo, String?) -> Void // edited rest to commit, nil = cancel
         let select: (ParsedTodo, Bool) -> Void // row click; Bool = shift held (toggle membership)
 
@@ -1041,13 +1173,14 @@ private struct TodoSubtree: View {
              nav: NativeDashNavModel?, frames: TodoRowFrameStore,
              toggle: @escaping (ParsedTodo) -> Void, open: @escaping (ParsedTodo) -> Void,
              fold: @escaping (ParsedTodo) -> Void, foldAndCenter: @escaping (ParsedTodo) -> Void,
-             editing: String? = nil, endEdit: @escaping (ParsedTodo, String?) -> Void = { _, _ in },
+             editing: String? = nil, editingPreselect: String? = nil,
+             endEdit: @escaping (ParsedTodo, String?) -> Void = { _, _ in },
              select: @escaping (ParsedTodo, Bool) -> Void = { _, _ in }) {
             self.today = today; self.ownNoteKey = ownNoteKey; self.theme = theme
             self.live = live; self.nav = nav; self.frames = frames
             self.toggle = toggle; self.open = open; self.fold = fold
             self.foldAndCenter = foldAndCenter
-            self.editing = editing; self.endEdit = endEdit
+            self.editing = editing; self.editingPreselect = editingPreselect; self.endEdit = endEdit
             self.select = select
         }
     }
@@ -1068,7 +1201,7 @@ private struct TodoSubtree: View {
                 // for the inline line editor — checkbox and the selected dressing stay put.
                 if ctx.editing == NativeDashPanel.anchor(t) {
                     TodoEditingRow(todo: t, anchor: NativeDashPanel.anchor(t), theme: ctx.theme,
-                                   frames: ctx.frames,
+                                   frames: ctx.frames, preselect: ctx.editingPreselect,
                                    onToggle: { ctx.toggle(t) },
                                    onFinish: { ctx.endEdit(t, $0) })
                         .id(NativeDashPanel.anchor(t))
@@ -1108,11 +1241,14 @@ private struct TodoSubtree: View {
         }
     }
 
-    /// The normal (non-editing) row: TodoRow + its frame report for the right-click layer.
+    /// The normal (non-editing) row. Its frame report (for the right-click layer + click-away
+    /// deselect) now lives INSIDE TodoRow, on the content cluster — a full-width report here
+    /// made the empty space right of a row count as "on the row" and never deselect.
     private func plainRow(_ t: ParsedTodo, focused: Bool) -> some View {
         TodoRow(todo: t, today: ctx.today, ownNoteKey: ctx.ownNoteKey, theme: ctx.theme,
                 focused: focused,
                 selected: ctx.nav?.selected.contains(NativeDashPanel.anchor(t)) ?? false,
+                anchor: NativeDashPanel.anchor(t), frames: ctx.frames,
                 foldable: node.item.foldable, folded: node.item.folded,
                 hiddenSubs: node.item.hidden,
                 onToggle: { ctx.toggle(t) },
@@ -1120,10 +1256,6 @@ private struct TodoSubtree: View {
                 onSelect: { shift in ctx.select(t, shift) },
                 onFold: { ctx.fold(t) })
             .id(NativeDashPanel.anchor(t))
-            // Layout-driven frame reporting for the right-click layer: the row's rect in
-            // the PANEL-ROOT space (scroll-correct — the GeometryReader re-reads on scroll).
-            .background(RowFrameReporter(anchor: NativeDashPanel.anchor(t), todo: t,
-                                         frames: ctx.frames))
     }
 }
 
@@ -1161,6 +1293,7 @@ private struct TodoSelectionWash: View {
         let anchor: String
         let theme: Theme
         let frames: TodoRowFrameStore
+        var preselect: String? = nil // opens with this prefix selected (⇧Enter placeholder)
         let onToggle: () -> Void
         let onFinish: (String?) -> Void
 
@@ -1169,7 +1302,7 @@ private struct TodoSelectionWash: View {
                 DashCheckbox(checked: todo.done, size: 15, action: onToggle)
                     .padding(.top, 9) // centered on the editor box (4 slot + (25 − 15) / 2)
                     .handCursor()
-                TodoRowEditor(todo: todo, theme: theme, onFinish: onFinish)
+                TodoRowEditor(todo: todo, theme: theme, preselect: preselect, onFinish: onFinish)
             }
             .padding(.leading, 14) // the selected indent — clear of the accent bar, like TodoRow
             .background(TodoSelectionWash(active: true))
@@ -1192,6 +1325,8 @@ private struct TodoRow: View {
     let theme: Theme
     var focused: Bool = false // keyboard cursor here → dashed accent ring
     var selected: Bool = false // clicked-selected → light accent wash over the row
+    var anchor: String = "" // soft-link anchor for the frame report (empty = don't report)
+    var frames: TodoRowFrameStore? // content-cluster rects (right-click layer + click-away)
     var foldable: Bool = false // has sub-items → trailing disclosure chevron
     var folded: Bool = false
     var hiddenSubs: Int = 0 // rows hidden under this folded parent ("+N sub")
@@ -1302,6 +1437,14 @@ private struct TodoRow: View {
         // the wash (the grey text-region hover is suppressed while selected).
         .padding(.leading, selected ? 14 : 0)
         .background(selectionWash)
+        // The CONTENT-hugging frame report (panel-root space, scroll-correct): right-clicks
+        // match the whole row band, but the left-click-away deselect needs the true content
+        // rect — empty space right of the row must read as empty.
+        .background(Group {
+            if let frames, !anchor.isEmpty {
+                RowFrameReporter(anchor: anchor, todo: todo, frames: frames)
+            }
+        })
         .animation(.easeOut(duration: 0.12), value: selected)
     }
 

@@ -94,6 +94,29 @@ final class NowEdgeTests: XCTestCase {
         XCTAssertEqual(rect.midY, mini.rect.midY, accuracy: 1.5)
     }
 
+    func testDeadlineMiniHonorsTheFullLabelsSide() throws {
+        // The mini pill must sit on the SAME side as the full label's base side (the offline
+        // deadlineSides assignment) — falling back to the default geometric rule made the tag
+        // jump sides at the big↔mini handoff when the solver had picked the other side.
+        let g = input(now: earlyMorningNow(), tlScroll: 700) // hour-4 deadline out the top
+        let d = Deadline(id: "d", year: g.year, month: g.focus, day: 2, hour: 4,
+                         title: "Ship", color: "red")
+        let byDefault = try XCTUnwrap(deadlineEdgeLabel(d, g))
+        let overridden = try XCTUnwrap(deadlineEdgeLabel(d, g, onLeft: !byDefault.onLeft))
+        XCTAssertEqual(overridden.onLeft, !byDefault.onLeft, "the solver's side wins")
+        XCTAssertNotEqual(overridden.rect.minX, byDefault.rect.minX,
+                          "the two sides place the pill on opposite sides of the column")
+        // And nil (no solver entry) matches the full label's own fallback: the default rule.
+        let pos = deadlineRawSanity(d, g)
+        XCTAssertEqual(byDefault.onLeft, g.z > 2 || (pos.x + pos.w / 2 >= (Layout.labelW + g.vp.w) / 2))
+    }
+
+    /// The column x/w the mini derives from (deadlineEdgePos, ignoring the vertical cull).
+    private func deadlineRawSanity(_ d: Deadline, _ g: SceneInput) -> (x: CGFloat, w: CGFloat) {
+        let ep = deadlineEdgePos(d, g)!
+        return (ep.x, ep.w)
+    }
+
     func testScrolledOutNowClampsToTopEdge() throws {
         let g = input(now: earlyMorningNow(), tlScroll: 700) // late window → 04:00 exits the TOP
         XCTAssertEqual(item(g, "now-w")?.opacity ?? 0, 0, "the real now-line is off-screen")

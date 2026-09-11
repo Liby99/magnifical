@@ -267,6 +267,7 @@ extension CatcherView {
     private static func token(for e: NSEvent) -> KeyToken? {
         if e.modifierFlags.contains(.command) {
             switch e.keyCode { // ⌘+arrows → nudge the selected event
+            case 36, 76: return .cmdEnter // ⌘Return → sibling to-do under the selected row
             case 126: return .cmdUp
             case 125: return .cmdDown
             case 123: return .cmdLeft
@@ -286,7 +287,7 @@ extension CatcherView {
         }
         let shift = e.modifierFlags.contains(.shift)
         switch e.keyCode {
-        case 36, 76: return .enter
+        case 36, 76: return shift ? .shiftEnter : .enter
         case 49: return .space
         case 53: return .escape
         case 48: return shift ? .backTab : .tab

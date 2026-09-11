@@ -76,6 +76,38 @@ import Observation
         editRequest = EditRequest(anchor: anchor, seq: editSeq)
     }
 
+    /// Delete-key handshake, same shape as `editRequest`: the keyboard layer posts the current
+    /// selection; the live panel that owns the rows raises the confirm dialog and clears this.
+    public struct DeleteRequest: Equatable {
+        public var anchors: Set<String>
+        public var seq: Int
+    }
+
+    public var deleteRequest: DeleteRequest?
+    @ObservationIgnored private var deleteSeq = 0
+
+    public func requestDelete() {
+        guard !selected.isEmpty else { return }
+        deleteSeq += 1
+        deleteRequest = DeleteRequest(anchors: selected, seq: deleteSeq)
+    }
+
+    /// ⇧Enter / ⌘Enter handshake: add a new row under the (single) selected one, then edit it —
+    /// a CHILD one indent deeper (⇧, above existing sub-items) or a SIBLING at the same level (⌘).
+    public struct SubItemRequest: Equatable {
+        public var anchor: String
+        public var sibling: Bool
+        public var seq: Int
+    }
+
+    public var subItemRequest: SubItemRequest?
+    @ObservationIgnored private var subItemSeq = 0
+
+    public func requestSubItem(_ anchor: String, sibling: Bool = false) {
+        subItemSeq += 1
+        subItemRequest = SubItemRequest(anchor: anchor, sibling: sibling, seq: subItemSeq)
+    }
+
     public func requestNoteJump(key: String, line: Int) {
         jumpSeq += 1
         noteJump = NoteJumpRequest(key: key, line: line, seq: jumpSeq)

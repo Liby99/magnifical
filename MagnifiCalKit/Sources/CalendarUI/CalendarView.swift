@@ -778,9 +778,9 @@ public struct CalendarView: View {
                                         guard !NativeDash.tapsSuppressed else { return }
                                         jumpToNoteKey(key, line: line)
                                     },
-                                    onDeleteRequest: { text, confirm in
+                                    onDeleteRequest: { text, source, confirm in
                                         ui.pendingTodoDelete = CalendarUIState
-                                            .PendingTodoDelete(text: text, confirm: confirm)
+                                            .PendingTodoDelete(text: text, source: source, confirm: confirm)
                                     },
                                     onRowMenu: { ui.todoMenu = $0 },
                                     warmAllTabs: NativeDash.warmIds.contains(panel.panelId),

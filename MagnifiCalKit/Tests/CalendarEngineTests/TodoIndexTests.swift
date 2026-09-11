@@ -128,6 +128,57 @@ final class TodoIndexTests: XCTestCase {
         XCTAssertNil(TodoIndex.replaceTodoRest(note, line: 9, rest: "x"))
     }
 
+    func testInsertSubTodo() {
+        // New child directly under the parent, ABOVE existing sub-items, one indent step deeper.
+        let note = "- [ ] parent\n  - [ ] old child\nprose"
+        XCTAssertEqual(TodoIndex.insertSubTodo(note, line: 1, text: "work on..."),
+                       "- [ ] parent\n  - [ ] work on...\n  - [ ] old child\nprose")
+        // Under an already-nested parent: its indent + 2.
+        XCTAssertEqual(TodoIndex.insertSubTodo(note, line: 2, text: "x"),
+                       "- [ ] parent\n  - [ ] old child\n    - [ ] x\nprose")
+        // Stale anchors: not a task line / line gone.
+        XCTAssertNil(TodoIndex.insertSubTodo(note, line: 3, text: "x"))
+        XCTAssertNil(TodoIndex.insertSubTodo(note, line: 9, text: "x"))
+    }
+
+    func testInsertSiblingTodo() {
+        let note = "- [ ] a\n  - [ ] child\n    - [ ] grandchild\nprose"
+        // Top-level sibling lands BELOW the whole subtree (children stay attached to `a`),
+        // same (empty) indent, created: stamp appended.
+        XCTAssertEqual(TodoIndex.insertSiblingTodo(note, line: 1, text: "work on...", stamp: "2026-09-12T10:00"),
+                       "- [ ] a\n  - [ ] child\n    - [ ] grandchild\n"
+                           + "- [ ] work on... created:2026-09-12T10:00\nprose")
+        // Nested sibling: below the child's own subtree, its indent, NO stamp (children stay bare).
+        XCTAssertEqual(TodoIndex.insertSiblingTodo(note, line: 2, text: "x", stamp: "2026-09-12T10:00"),
+                       "- [ ] a\n  - [ ] child\n    - [ ] grandchild\n  - [ ] x\nprose")
+        XCTAssertNil(TodoIndex.insertSiblingTodo(note, line: 4, text: "x"))
+    }
+
+    func testSubtreeEnd() {
+        let note = "- [ ] a\n  - [ ] child\n    - [ ] grandchild\n- [ ] b"
+        XCTAssertEqual(TodoIndex.subtreeEnd(note, line: 1), 3) // a's subtree runs through grandchild
+        XCTAssertEqual(TodoIndex.subtreeEnd(note, line: 2), 3) // child's subtree = the grandchild
+        XCTAssertEqual(TodoIndex.subtreeEnd(note, line: 4), 4) // b is a leaf
+    }
+
+    func testSubtreeEndIncludesNonTaskContent() {
+        // Deeper-indented PLAIN bullets/notes belong to the subtree too — a sibling insert
+        // must never split an item from its attached prose (the PLDI reimbursement bug).
+        let note = """
+        - [ ] Reimburse PLDI #reimbursement created:2026-08-08T20:42
+          - [ ] Do it now!!!!!!
+          - [ ] Understand JHU reimbursement process p:!!! due:2026-07-24 #reimbursement
+            - System: **SAP Concur** — log in via [the portal](https://portal.example.edu)
+            - Submit within **90 days of June 20** → deadline ~Sept 18
+            - No receipt needed for expenses under $75
+        - [ ] next top-level
+        """
+        XCTAssertEqual(TodoIndex.subtreeEnd(note, line: 1), 6) // through the prose bullets
+        XCTAssertEqual(TodoIndex.subtreeEnd(note, line: 3), 6) // the child owns its notes
+        let out = TodoIndex.insertSiblingTodo(note, line: 1, text: "work on...")
+        XCTAssertEqual(out?.components(separatedBy: "\n")[6], "- [ ] work on...")
+    }
+
     func testLinesNeedingCreated() {
         let note = """
         - [ ] no stamp

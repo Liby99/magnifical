@@ -640,6 +640,63 @@ public enum TodoIndex {
         }
     }
 
+    /// Insert a NEW sub-item directly under `line` (1-based): the parent's leading whitespace
+    /// plus one nesting step (two spaces — the tokenizer's indent rule), "- [ ] <text>". The new
+    /// row lands at `line + 1`, ABOVE any existing sub-items. No `created:` stamp: the session
+    /// post-processing only stamps TOP-LEVEL task lines (see linesNeedingCreated), and this is
+    /// a child by construction. Returns the new note, or nil on a stale anchor.
+    public static func insertSubTodo(_ noteText: String, line: Int, text: String) -> String? {
+        var lines = noteText.components(separatedBy: "\n")
+        guard line >= 1, line <= lines.count, let m = taskLine.first(lines[line - 1]) else {
+            return nil
+        }
+        let indent = m[1].prefix { $0 == " " || $0 == "\t" } + "  "
+        lines.insert("\(indent)- [ ] \(text)", at: line)
+        return lines.joined(separator: "\n")
+    }
+
+    /// Insert a NEW sibling after the task at `line` (1-based) — BELOW its whole subtree, so
+    /// the item's existing children stay attached to it (inserting between them would re-parent
+    /// them onto the new row; nesting is adjacency + indentation). Same leading whitespace, so
+    /// it nests at the item's own level, "- [ ] <text>"; the new row lands at
+    /// `subtreeEnd(…) + 1`. A TOP-LEVEL sibling gets ` created:<stamp>` appended (the stamping
+    /// convention covers top-level lines only — see linesNeedingCreated); nested siblings stay
+    /// bare. Returns the new note, or nil on a stale anchor.
+    public static func insertSiblingTodo(_ noteText: String, line: Int, text: String,
+                                         stamp: String? = nil) -> String? {
+        var lines = noteText.components(separatedBy: "\n")
+        guard line >= 1, line <= lines.count, let m = taskLine.first(lines[line - 1]) else {
+            return nil
+        }
+        let indent = m[1].prefix { $0 == " " || $0 == "\t" }
+        var row = "\(indent)- [ ] \(text)"
+        if indent.isEmpty, let stamp {
+            row += " created:\(stamp)"
+        }
+        lines.insert(row, at: subtreeEnd(noteText, line: line))
+        return lines.joined(separator: "\n")
+    }
+
+    /// The LAST line (1-based) of the task subtree rooted at `line`: the run of consecutive
+    /// NON-BLANK lines below it with strictly deeper indentation — sub-tasks AND their content
+    /// (plain bullets, notes) alike, so a sibling insert can never split an item from its
+    /// attached prose. `line` itself when nothing deeper follows (or it isn't a task line).
+    public static func subtreeEnd(_ noteText: String, line: Int) -> Int {
+        let lines = noteText.components(separatedBy: "\n")
+        guard line >= 1, line <= lines.count, let m = taskLine.first(lines[line - 1]) else {
+            return line
+        }
+        let depth = m[1].prefix(while: { $0 == " " || $0 == "\t" }).count
+        var end = line
+        while end < lines.count {
+            let next = lines[end]
+            let indent = next.prefix(while: { $0 == " " || $0 == "\t" }).count
+            guard indent > depth, !next.trimmingCharacters(in: .whitespaces).isEmpty else { break }
+            end += 1
+        }
+        return end
+    }
+
     /// Remove the task line entirely — children/sub-items keep their own lines; only this one
     /// goes. Returns the new note, or nil on a stale anchor (line gone / not a task line).
     public static func removeTodoLine(_ noteText: String, line: Int) -> String? {

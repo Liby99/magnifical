@@ -160,7 +160,10 @@ public struct DeadlinesOverlay: View {
             if let hide, d.id == hide {
                 continue
             }
-            guard let lab = deadlineEdgeLabel(d, input, focus: focus, anim: anim) else { continue }
+            // Same BASE side as the full pill (offline assignment, default fallback) — the
+            // big↔mini morph must never change sides; only a re-solve (month/set change) may.
+            guard let lab = deadlineEdgeLabel(d, input, focus: focus, anim: anim,
+                                              onLeft: sides[d.id]) else { continue }
             let rd = relDomOf(input.year, focus, d.year, d.month, d.day) ?? -999
             let spill = (input.z >= 1.5) ? spillFactor(d.month, gf, dim: EventsOverlay.spilloverDim) : 1
             let fade = dailyFade(rd, gf) * tl.reveal * fadeMul * spill

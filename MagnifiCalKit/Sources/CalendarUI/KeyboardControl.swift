@@ -23,7 +23,8 @@ import SwiftUI
 
 /// ── A normalized key, independent of view/state (mapped from the raw NSEvent by the catcher) ──
 enum KeyToken: Equatable {
-    case enter, space, escape, tab, backTab, left, right, up, down, delete, cmdS, cmdN, cmdT, cmdU, cmdL
+    case enter, shiftEnter, cmdEnter, space, escape, tab, backTab, left, right, up, down, delete, cmdS, cmdN,
+         cmdT, cmdU, cmdL
     case cmdEqual, cmdMinus // ⌘= / ⌘− → zoom in / out (keeps the current focus)
     case cmdUp, cmdDown, cmdLeft, cmdRight // ⌘+arrows → move the selected event
     case optUp, optDown // ⌥↑ / ⌥↓ — guide display only (the note editor owns them: move line)
@@ -46,6 +47,8 @@ enum KeyToken: Equatable {
     var cap: String {
         switch self {
         case .enter: "return"
+        case .shiftEnter: "⇧return"
+        case .cmdEnter: "⌘return"
         case .space: "space"
         case .escape: "esc"
         case .tab: "tab"
@@ -505,6 +508,18 @@ enum AppKeyState: Equatable {
         // Every other key still flows to the state table.
         if token == .enter, let nav = dashNav, nav.selected.count == 1, let a = nav.selected.first {
             nav.requestEdit(a)
+            return true
+        }
+        // ⇧Enter / ⌘Enter with exactly ONE selected row → add a child / sibling and edit it.
+        if token == .shiftEnter || token == .cmdEnter, let nav = dashNav, nav.selected.count == 1,
+           let a = nav.selected.first {
+            nav.requestSubItem(a, sibling: token == .cmdEnter)
+            return true
+        }
+        // Delete with selected TODO rows → the confirm dialog (single names its source note;
+        // several confirm as a count). Same exclusivity argument as Enter above.
+        if token == .delete, let nav = dashNav, !nav.selected.isEmpty {
+            nav.requestDelete()
             return true
         }
         for b in bindings() where b.token == token {
