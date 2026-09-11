@@ -63,17 +63,19 @@ extension CalendarEngine {
             revealEdgeIndicatorTarget(t)
             return
         }
-        // 2. timed events (on the timeline)
+        // 2. deadlines (on the timeline) — BEFORE the timed events: the label pills + moment
+        //    line draw ABOVE the event stickers, so where they overlap, the deadline is what
+        //    the user sees and what the pointer must pick (hover order matches in onHover).
+        if z >= ViewConst.detailZ, let id = deadlineAt(p, g) {
+            selectedId = id
+            drag = Drag(kind: .ddlMove, startPoint: p, eventId: id, origDdl: items.deadlines.first { $0.id == id })
+            return
+        }
+        // 3. timed events (on the timeline)
         if z >= 1.5, let hit = eventAt(p, g) {
             selectedId = hit.id
             drag = Drag(kind: hit.zone, startPoint: p, eventId: hit.id, orig: items.events.first { $0.id == hit.id },
                         priorSelection: prior, titleHit: hit.overTitle)
-            return
-        }
-        // 3. deadlines (on the timeline)
-        if z >= ViewConst.detailZ, let id = deadlineAt(p, g) {
-            selectedId = id
-            drag = Drag(kind: .ddlMove, startPoint: p, eventId: id, origDdl: items.deadlines.first { $0.id == id })
             return
         }
         // 3b. deadline quick-add "+" (near a day's left edge, on an hour line) → create a deadline and
@@ -317,6 +319,13 @@ extension CalendarEngine {
             hoveredEventId = d.id // its edge mini pill picks up the mild hover styling
             hv.overDeadline = true // and the mouse cursor line/tag hide, like over a full label
         }
+        // Deadlines BEFORE the timed events (and before their hover stickiness): the label
+        // pills + moment line draw ABOVE the stickers, so in an overlap the deadline is what
+        // the user sees — it must take the hover, even from a stuck hovered event.
+        else if z >= ViewConst.detailZ, let d = deadlineAt(p, g) {
+            hoveredEventId = d
+            hv.overDeadline = true
+        }
         // Hover stickiness: if the cursor is still inside the currently-hovered event,
         // keep it — so moving into an overlap doesn't hand the highlight to the event
         // underneath. Only when the cursor leaves it do we re-pick the topmost.
@@ -330,8 +339,6 @@ extension CalendarEngine {
             hoveredEventId = nil // the indicator stack owns the pointer — no hover on events under it
         } else if z >= 1.5, let e = eventAt(p, g) {
             hoveredEventId = e.id; hv.overTimed = true
-        } else if z >= ViewConst.detailZ, let d = deadlineAt(p, g) {
-            hoveredEventId = d; hv.overDeadline = true
         } else {
             hoveredEventId = nil
         }
@@ -412,6 +419,11 @@ extension CalendarEngine {
         if z >= 1.5, edgeIndicatorTarget(at: p, g) != nil {
             return .pointer
         }
+        // Deadline label/line BEFORE the timed events — it draws above them, so in an overlap
+        // it's what the pointer picks (matches the down/hover chains).
+        if z >= ViewConst.detailZ, deadlineAt(p, g) != nil {
+            return .grab
+        }
         // Timed event: the top/bottom edges resize (↕); the title of a SELECTED event is an I-beam (a second
         // click inline-edits it); the accent bar, the time text, and the empty body are a grab hand.
         if z >= 1.5, let hit = eventAt(p, g) {
@@ -419,9 +431,6 @@ extension CalendarEngine {
             case .resizeTop, .resizeBottom: return .resizeV
             default: return (hit.id == selectedId && hit.overTitle) ? .text : .grab
             }
-        }
-        if z >= ViewConst.detailZ, deadlineAt(p, g) != nil {
-            return .grab
         }
         return .normal // empty calendar → plain arrow (no create "+" cursor)
     }

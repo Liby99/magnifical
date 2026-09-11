@@ -489,13 +489,7 @@ public struct CalendarView: View {
                                hovered: engine.hoveredEventId,
                                hide: liftDdl, sceneDX: sceneDX, theme: theme)
                 .equatable()
-            // …and the labels are SwiftUI glass pills (activation styling), above the line.
-            DeadlinesOverlay(input: input, deadlines: engine.viewDeadlines(),
-                             sides: engine.deadlineSides(),
-                             selected: engine.selectedId, selectedIds: engine.selectedIds,
-                             hovered: engine.hoveredEventId,
-                             drawerOpen: ui.openEventId != nil, hide: liftDdl, theme: theme)
-                .offset(x: sceneDX)
+            // (…the deadline label pills render in 4b, ABOVE the chrome — see below.)
             // 4. chrome on top of the glass: gutter labels/borders, track names, now-line/cursor, dashboard title.
             // Rest-year: the gutter (month names + track names + borders) is scroll-rigid → cached layer;
             // the per-frame pass keeps only the gutter hover strip + foreground + pull hints.
@@ -527,9 +521,16 @@ public struct CalendarView: View {
                     }
                 }
             }
-            // 4b. time tags ABOVE the chrome: the CURRENT TIME pill + cursor time tag render over the
-            // gutter hour labels/borders, so their frosted glass blurs the labels instead of the
-            // labels drawing crisp across the tag (the day-view left-gutter collision).
+            // 4b. glass pills ABOVE the chrome: the deadline labels, then the CURRENT TIME pill +
+            // cursor time tag, render over the gutter hour labels/borders — their frosted glass
+            // blurs the labels instead of the labels drawing crisp across the pill (the day-view
+            // left-gutter collision; deadline labels sit left of the single day column there).
+            DeadlinesOverlay(input: input, deadlines: engine.viewDeadlines(),
+                             sides: engine.deadlineSides(),
+                             selected: engine.selectedId, selectedIds: engine.selectedIds,
+                             hovered: engine.hoveredEventId,
+                             drawerOpen: ui.openEventId != nil, hide: liftDdl, theme: theme)
+                .offset(x: sceneDX)
             TimeTagsOverlay(input: input, theme: theme)
                 .offset(x: sceneDX)
             // Keyboard-navigation cursor (dashed sliding ring).

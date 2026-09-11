@@ -767,8 +767,45 @@ private func buildDetail(_ g: SceneInput, _ clock: Clock, focus: Int, detailMul:
         let compact = Layout.isCompactGutter
         var hr = 0
         let step = wide ? 1 : (compact && hourH >= 14 ? 1 : 6)
-        let labelEvery = wide ? 2 : (compact && hourH >= 14 ? 2 : 6)
+        // Time-tick density follows the timeline's hour height (the pinch/scale-bar knob):
+        // past the MIDPOINT of the allowable range a label every hour; past 90% of it, extra
+        // half-hour ticks + labels too. Below the midpoint the resting every-2-hours stands.
+        let hRange = MAX_HOUR_H - MIN_HOUR_H
+        let everyHour = wide && hourH > MIN_HOUR_H + 0.5 * hRange
+        let halfHours = wide && hourH > MIN_HOUR_H + 0.9 * hRange
+        let labelEvery = wide ? (everyHour ? 1 : 2) : (compact && hourH >= 14 ? 2 : 6)
         while hr <= 24 {
+            // Half-hour tick + label between this hour and the next (dense scale only).
+            if halfHours, hr < 24 {
+                let hy = tlTop + (CGFloat(hr) + 0.5) * hourH - scroll
+                if hy >= tlTop - 0.5, hy <= tlBottom + 0.5 {
+                    items.append(Item(
+                        key: "hl-\(hr)h",
+                        kind: .gridline,
+                        x: Layout.labelW,
+                        y: hy,
+                        w: g.vp.w - Layout.labelW,
+                        h: 1,
+                        opacity: reveal * 0.08,
+                        lineStyle: .dotted,
+                        z: 0
+                    ))
+                    items.append(Item(
+                        key: "ht-\(hr)h",
+                        kind: .dayLabel,
+                        x: compact ? 2 : Layout.labelW - 46,
+                        y: hy - 7,
+                        w: compact ? Layout.labelW - 8 : 42,
+                        h: 14,
+                        opacity: reveal * 0.5, // quieter than the on-the-hour labels
+                        text: String(format: "%02d:30", hr),
+                        fontSize: 9,
+                        align: compact ? .right : .center,
+                        z: 9,
+                        gutter: true
+                    ))
+                }
+            }
             let y = tlTop + CGFloat(hr) * hourH - scroll
             if y < tlTop - 0.5 || y > tlBottom + 0.5 {
                 hr += step; continue
