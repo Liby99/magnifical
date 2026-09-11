@@ -160,23 +160,15 @@ public struct DeadlinesOverlay: View {
             if let hide, d.id == hide {
                 continue
             }
-            guard let ep = deadlineEdgePos(d, input, focus: focus, anim: anim) else { continue }
+            guard let lab = deadlineEdgeLabel(d, input, focus: focus, anim: anim) else { continue }
             let rd = relDomOf(input.year, focus, d.year, d.month, d.day) ?? -999
             let spill = (input.z >= 1.5) ? spillFactor(d.month, gf, dim: EventsOverlay.spilloverDim) : 1
             let fade = dailyFade(rd, gf) * tl.reveal * fadeMul * spill
             if fade <= 0.02 {
                 continue
             }
-            // Same side rule as the full label (deadlineLabelInfo), fixed mini size.
-            let onLeft = input.z > 2 || (ep.x + ep.w / 2 >= (Layout.labelW + input.vp.w) / 2)
-            let W = DeadlineEdgeLabel.width
-            let left = onLeft ? ep.x - DeadlineLabel.gap - W : ep.x + ep.w + DeadlineLabel.gap
-            out.append(EdgeSpec(
-                id: d.id,
-                rect: CGRect(x: left, y: ep.y - DeadlineEdgeLabel.height / 2,
-                             width: W, height: DeadlineEdgeLabel.height),
-                onLeft: onLeft, color: d.color, fade: Double(fade)
-            ))
+            out.append(EdgeSpec(id: d.id, rect: lab.rect, onLeft: lab.onLeft,
+                                color: d.color, fade: Double(fade)))
         }
         return out
     }
@@ -225,7 +217,8 @@ public struct DeadlinesOverlay: View {
         let rightEdge = clipRight >= input.vp.w - 0.5 ? input.vp.w + Layout.labelW : clipRight
         ZStack(alignment: .topLeading) {
             ForEach(edgeSpecs(focus: focus, anim: anim, fadeMul: fadeMul)) { s in
-                MiniDeadlinePill(color: theme.eventBorder(s.color), onLeft: s.onLeft, theme: theme)
+                MiniDeadlinePill(color: theme.eventBorder(s.color), onLeft: s.onLeft,
+                                 hovering: s.id == hovered, theme: theme)
                     .frame(width: s.rect.width, height: s.rect.height)
                     .opacity(s.fade)
                     .position(x: s.rect.midX, y: s.rect.midY)
@@ -315,19 +308,20 @@ private struct DeadlinePill: View {
 private struct MiniDeadlinePill: View {
     let color: Color
     let onLeft: Bool // pill sits left of the column → caret on its RIGHT edge (points in)
+    var hovering: Bool = false // click target (scroll-to-center) → mild hover styling
     let theme: Theme
     var body: some View {
         let r = DeadlineEdgeLabel.radius
         let shape = RoundedRectangle(cornerRadius: r)
+        // Hover = the hover activation's tint bump + a slightly stronger edge and small scale-up
+        // (the pointing-hand cursor comes from the engine's cursorHint, like the edge stacks).
+        let tint = (hovering ? EventActivation.hover.tint : EventActivation.plain.tint) * theme.eventTintScale
         ZStack {
             shape.fill(theme.bg) // occlude the timeline behind, like the full pill
-            Color.clear.glassEffectCompat(
-                .regular.tint(color.opacity(EventActivation.plain.tint * theme.eventTintScale)),
-                in: shape
-            )
+            Color.clear.glassEffectCompat(.regular.tint(color.opacity(tint)), in: shape)
         }
         .overlay {
-            SideBorder(pointsRight: onLeft, radius: r).strokeBorder(color, lineWidth: 1)
+            SideBorder(pointsRight: onLeft, radius: r).strokeBorder(color, lineWidth: hovering ? 1.5 : 1)
         }
         .overlay {
             Caret(pointsRight: onLeft).fill(color)
@@ -336,6 +330,8 @@ private struct MiniDeadlinePill: View {
                        alignment: onLeft ? .trailing : .leading)
                 .offset(x: onLeft ? 4 : -4)
         }
+        .scaleEffect(hovering ? 1.07 : 1)
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 

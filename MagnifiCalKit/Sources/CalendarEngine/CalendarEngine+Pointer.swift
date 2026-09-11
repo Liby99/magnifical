@@ -55,6 +55,11 @@ extension CalendarEngine {
             revealNowLine()
             return
         }
+        // 1d. a deadline's edge mini pill: same treatment — glide to center that deadline's hour.
+        if z >= 0.5, let d = deadlineEdgeTagAt(p, g) {
+            scrollTimelineToCenter(hour: d.hour)
+            return
+        }
         // 2. timed events (on the timeline)
         if z >= 1.5, let hit = eventAt(p, g) {
             selectedId = hit.id
@@ -313,6 +318,9 @@ extension CalendarEngine {
         } else if z >= 0.5, nowEdgeTagHit(at: p, g) {
             hoveredEventId = nil // the "now" tag owns the pointer → mild hover styling on the tag
             hv.overNowTag = true
+        } else if z >= 0.5, let d = deadlineEdgeTagAt(p, g) {
+            hoveredEventId = d.id // its edge mini pill picks up the mild hover styling
+            hv.overDeadline = true // and the mouse cursor line/tag hide, like over a full label
         } else if z >= 1.5, let e = eventAt(p, g) {
             hoveredEventId = e.id; hv.overTimed = true
         } else if z >= ViewConst.detailZ, let d = deadlineAt(p, g) {
@@ -392,6 +400,10 @@ extension CalendarEngine {
         }
         // The now-line's edge "now" tag: a click target (scroll-to-center) → the pointing hand.
         if z >= 0.5, nowEdgeTagHit(at: p, g) {
+            return .pointer
+        }
+        // A deadline's edge mini pill: the same click target → the pointing hand.
+        if z >= 0.5, deadlineEdgeTagAt(p, g) != nil {
             return .pointer
         }
         // Timed event: the top/bottom edges resize (↕); the title of a SELECTED event is an I-beam (a second

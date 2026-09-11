@@ -151,15 +151,26 @@ extension CalendarEngine {
     }
 
     /// Click on the edge "now" tag: glide the timeline so the current time sits CENTERED.
-    /// Passing a viewport-height window around now to scrollTimelineTo pins its top at
-    /// nowFrac − halfSpan (clamped at the day's ends), i.e. now lands mid-viewport.
     func revealNowLine() {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        scrollTimelineToCenter(hour: CGFloat(c.hour ?? 0) + CGFloat(c.minute ?? 0) / 60)
+    }
+
+    /// The OFF-VIEWPORT deadline whose edge mini pill is under `p` (nil while on-screen — the
+    /// pill and deadlinePos are mutually exclusive). Same source list as deadlineAt.
+    func deadlineEdgeTagAt(_ p: CGPoint, _ g: SceneInput) -> Deadline? {
+        displayDeadlines(for: year).first { d in
+            deadlineEdgeLabel(d, g).map { $0.rect.insetBy(dx: -2, dy: -2).contains(p) } == true
+        }
+    }
+
+    /// Glide the timeline so `hour` sits CENTERED: a viewport-height window around it pins
+    /// scrollTimelineTo's top at hour − halfSpan (clamped at the day's ends) — mid-viewport.
+    func scrollTimelineToCenter(hour: CGFloat) {
         let tl = timelineInfo(snapshot())
         guard tl.hourH > 0 else { return }
-        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
-        let nowFrac = CGFloat(c.hour ?? 0) + CGFloat(c.minute ?? 0) / 60
         let halfSpan = (tl.tlBottom - tl.tlTop) / tl.hourH / 2
-        scrollTimelineTo(topHour: nowFrac - halfSpan, botHour: nowFrac + halfSpan)
+        scrollTimelineTo(topHour: hour - halfSpan, botHour: hour + halfSpan)
     }
 
     func createSpot(at p: CGPoint, _ g: SceneInput) -> (year: Int, month: Int, day: Int, anchor: CGFloat)? {

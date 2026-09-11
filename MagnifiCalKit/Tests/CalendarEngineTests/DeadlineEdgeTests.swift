@@ -55,6 +55,30 @@ final class DeadlineEdgeTests: XCTestCase {
         XCTAssertGreaterThan(ep.w, 0)
     }
 
+    func testHoverAndClickOnEdgePillCentersDeadline() throws {
+        // The edge mini pill is a CLICK TARGET: hover → hand cursor + mild pill styling,
+        // click → the timeline glides so the deadline's hour lands mid-viewport.
+        let (e, id) = makeEngine()
+        e.demoScrollTimelineToHour(14) // hour-4 deadline exits through the TOP
+        let g = e.snapshotInput()
+        let d = try XCTUnwrap(e.viewDeadlines().first { $0.id == id })
+        let lab = try XCTUnwrap(deadlineEdgeLabel(d, g), "the edge pill is up")
+        let p = CGPoint(x: lab.rect.midX, y: lab.rect.midY)
+
+        e.onHover(at: p)
+        XCTAssertEqual(e.hoveredEventId, id, "hover lights the pill (mild styling)")
+        XCTAssertTrue(e.hover.overDeadline)
+        XCTAssertEqual(e.cursorHint(at: p), .pointer, "click target → hand cursor")
+
+        e.onPointerDown(at: p)
+        e.onPointerUp(at: p)
+        let tween = try XCTUnwrap(e.anim.tlScrollTween, "the click starts a scroll glide")
+        let tl = timelineInfo(g)
+        let halfSpan = (tl.tlBottom - tl.tlTop) / tl.hourH / 2
+        let expected = max(0, min(tl.maxScroll, (d.hour - halfSpan) * tl.hourH))
+        XCTAssertEqual(tween.to, expected, accuracy: 0.5, "the deadline lands mid-viewport")
+    }
+
     func testCulledColumnHasNoIndicatorEither() throws {
         // Day 15 is off the settled week window entirely (column culled) — neither the line
         // nor an edge indicator should render for it.

@@ -200,6 +200,20 @@ public enum DeadlineEdgeLabel {
     public static let radius: CGFloat = 5
 }
 
+/// The edge indicator's mini-pill placement for an OFF-VIEWPORT deadline: fixed
+/// DeadlineEdgeLabel size beside the edge line, same side rule as the full label. nil while
+/// the deadline is on-screen. ONE source of truth: the overlay renders this rect and the
+/// pointer hit-tests it (a click glides the timeline to center the deadline's hour).
+public func deadlineEdgeLabel(_ d: Deadline, _ g: SceneInput, focus: Int? = nil,
+                              anim: PageAnim? = nil) -> (rect: CGRect, onLeft: Bool)? {
+    guard let ep = deadlineEdgePos(d, g, focus: focus, anim: anim) else { return nil }
+    let onLeft = g.z > 2 || (ep.x + ep.w / 2 >= (Layout.labelW + g.vp.w) / 2)
+    let W = DeadlineEdgeLabel.width
+    let left = onLeft ? ep.x - DeadlineLabel.gap - W : ep.x + ep.w + DeadlineLabel.gap
+    return (CGRect(x: left, y: ep.y - DeadlineEdgeLabel.height / 2,
+                   width: W, height: DeadlineEdgeLabel.height), onLeft)
+}
+
 /// ── Deadline side-label placement (shared by the SwiftUI pill AND the pointer hit-test) ─────
 public enum DeadlineLabel {
     public static let height: CGFloat = 36
