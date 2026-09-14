@@ -33,8 +33,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSCalendarsFullAccessUsageDescription</key><string>Calendar reads your Apple Calendar events so it can show them alongside your libirabu calendar.</string>
-  <key>NSCalendarsUsageDescription</key><string>Calendar reads your Apple Calendar events so it can show them alongside your libirabu calendar.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Calendar reads your Apple Calendar events so it can show them alongside your MagnifiCal calendar.</string>
+  <key>NSCalendarsUsageDescription</key><string>Calendar reads your Apple Calendar events so it can show them alongside your MagnifiCal calendar.</string>
 </dict>
 </plist>
 PLIST

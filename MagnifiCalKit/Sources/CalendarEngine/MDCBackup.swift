@@ -3,14 +3,16 @@
 // object keyed by table name, each an array of rows, with `Date` columns tagged `{"__bk":"date","v":ISO}`.
 // The web dumps all 32 Prisma tables; the native app owns only three — `calendarItem` (events/bands/
 // deadlines), `calendarPrefs`, and `dailyNote` — so we populate those and leave the rest empty. This keeps
-// a native `.mdc` importable by the web app (interchange id stays "libirabu") and lets us import the web's
-// export. Dates use the same UTC wall-clock convention as the web (start = UTC(y,mo,d)+hour, see apiClient).
+// a native `.mdc` importable by the web app and lets us import the web's export. (The manifest's
+// interchange id is written as "magnifical" since 0.4.x; import never validates it, so legacy
+// "libirabu"-stamped backups — and ours in the retired web importer, which checks only structure —
+// still round-trip.) Dates use the same UTC wall-clock convention as the web (start = UTC(y,mo,d)+hour).
 
 import CalendarGeometry
 import Foundation
 
 public enum MDCBackup {
-    public static let app = "libirabu" // interchange id the web importer checks (file extension is .mdc)
+    public static let app = "magnifical" // manifest interchange id (file extension is .mgc / legacy .mdc)
     public static let format = 1
     static let dateTag = "__bk"
 
@@ -27,7 +29,7 @@ public enum MDCBackup {
         case notABackup, badJSON
         public var errorDescription: String? {
             switch self {
-            case .notABackup: "That file isn't a MagnifiCal/libirabu backup (missing manifest or database)."
+            case .notABackup: "That file isn't a MagnifiCal backup (missing manifest or database)."
             case .badJSON: "The backup's data could not be read."
             }
         }

@@ -11,7 +11,9 @@ import SwiftUI
 
 extension CatcherView {
     /// ── Clipboard: Copy / Cut / Paste / Delete (Edit menu + ⌘C/⌘X/⌘V, targeting the first responder) ──
-    private static let clipType = NSPasteboard.PasteboardType("com.libirabu.calendarkit.clip")
+    // Renamed from com.libirabu.calendarkit.clip (2026-09): the pasteboard is transient, so the
+    // only cost is one stale clipboard across the update — no persisted data keys on this string.
+    private static let clipType = NSPasteboard.PasteboardType("dev.magnifical.calendar.clip")
 
     /// Unambiguous entry point for programmatic copy (the context menu): `copy(nil)` from outside
     /// collides with NSObject's `copy()`/`copy(with:)` overloads, this name can't.

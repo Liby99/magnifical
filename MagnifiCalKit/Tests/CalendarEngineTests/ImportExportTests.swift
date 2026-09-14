@@ -64,11 +64,12 @@ final class ImportExportTests: XCTestCase {
         XCTAssertEqual(back.rich?["b1"]?.hidden, true)
     }
 
-    /// manifest.json declares the web interchange id, so the web importer accepts a native .mdc.
+    /// manifest.json declares the interchange id ("magnifical" since the 2026-09 audit; import
+    /// never validates it, so legacy-stamped backups still round-trip).
     func testManifestShape() throws {
         let files = try MDCBackup.encode(sampleState(), exportedAt: Date())
         let m = try JSONSerialization.jsonObject(with: XCTUnwrap(files["manifest.json"])) as? [String: Any]
-        XCTAssertEqual(m?["app"] as? String, "libirabu")
+        XCTAssertEqual(m?["app"] as? String, "magnifical")
         XCTAssertEqual(m?["format"] as? Int, 1)
     }
 

@@ -7,10 +7,16 @@
 import Foundation
 
 public enum ManagedNote {
-    static let begin = "libirabu:import:begin"
-    static let end = "libirabu:import:end"
+    // WRITE-side markers. The PARSE patterns below accept the legacy "libirabu:" spelling too:
+    // stored notes carry whatever marker was current when they last synced, and a miss would
+    // break the split (re-sync would stack a second managed block instead of replacing).
+    // Re-rendering (replaceManaged) upgrades a legacy block to these markers in passing.
+    static let begin = "magnifical:import:begin"
+    static let end = "magnifical:import:end"
+    private static let beginPat = "(?:magnifical|libirabu):import:begin"
+    private static let endPat = "(?:magnifical|libirabu):import:end"
     /// Whole managed block (markers + body), dot-matches-newline, case-insensitive.
-    private static let blockPattern = "<!--\\s*\(begin)[\\s\\S]*?\(end)\\s*-->"
+    private static let blockPattern = "<!--\\s*\(beginPat)[\\s\\S]*?\(endPat)\\s*-->"
 
     /// Split a stored note into its managed prefix (incl. markers; "" if none) and the user postfix.
     public static func splitNote(_ notes: String?) -> (managed: String, user: String) {
@@ -35,11 +41,11 @@ public enum ManagedNote {
     public static func flattenManaged(_ notes: String?) -> String {
         (notes ?? "")
             .replacingOccurrences(
-                of: "[ \\t]*<!--\\s*\(begin)[\\s\\S]*?-->[ \\t]*\\n?", with: "",
+                of: "[ \\t]*<!--\\s*\(beginPat)[\\s\\S]*?-->[ \\t]*\\n?", with: "",
                 options: [.regularExpression, .caseInsensitive]
             )
             .replacingOccurrences(
-                of: "[ \\t]*<!--\\s*\(end)\\s*-->[ \\t]*\\n?", with: "",
+                of: "[ \\t]*<!--\\s*\(endPat)\\s*-->[ \\t]*\\n?", with: "",
                 options: [.regularExpression, .caseInsensitive]
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -95,8 +101,8 @@ public enum ManagedNote {
     /// Keep vendor text from smuggling in our markers (which would corrupt later splits).
     private static func sanitize(_ s: String) -> String {
         s.replacingOccurrences(
-            of: "libirabu:import:(begin|end)",
-            with: "libirabu import",
+            of: "(?:magnifical|libirabu):import:(begin|end)",
+            with: "magnifical import",
             options: [.regularExpression, .caseInsensitive]
         )
     }
