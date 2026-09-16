@@ -75,6 +75,14 @@ struct NativeNoteEditor: NSViewRepresentable {
         var attachmentStore: (() -> AttachmentStore?)?
 
         // ── Attachment import: paste / drag (design §5.1) ─────────────────────────────
+        /// AppKit recomputes a text view's drag registration on focus/editability changes,
+        /// and a PLAIN-text view's own list doesn't reliably include file URLs — if it drops
+        /// out, the margin scroll view's registration shadows the text view and on-line drops
+        /// die. Pin .fileURL through every re-evaluation (the preview does the same).
+        override func updateDragTypeRegistration() {
+            super.updateDragTypeRegistration()
+            registerForDraggedTypes(registeredDraggedTypes + [.fileURL])
+        }
         /// ⌘V with files or image/PDF DATA on the pasteboard → import into the blob store and
         /// insert tokens at the caret; anything else falls through to the plain-text paste.
         override func paste(_ sender: Any?) {
