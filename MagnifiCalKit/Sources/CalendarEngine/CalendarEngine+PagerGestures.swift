@@ -557,6 +557,8 @@ extension CalendarEngine {
     public func onMagnify(delta: CGFloat, at p: CGPoint, began: Bool, ended: Bool,
                           fromPanel: Bool = false) {
         wake()
+        lastMagEvent = Date() // a pinch is live — hold the settle safety net off
+
         if began {
             cancelTween() // clears any held anchor; recapture fresh for this gesture
             anim.monthAnim = nil // a pinch overrides an in-flight month page

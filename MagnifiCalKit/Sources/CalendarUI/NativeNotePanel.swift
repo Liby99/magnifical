@@ -118,7 +118,12 @@ struct NativeNotePanel: View {
                                     pendingEditLine = line
                                     noteMode = .edit
                                 },
-                                attachments: engine.attachments)
+                                attachments: engine.attachments,
+                                onAppend: { md in
+                                    let cur = engine.dailyNote(storageKey)
+                                    engine.setDailyNote(storageKey, cur.isEmpty ? md : cur + "\n\n" + md)
+                                    engine.wake()
+                                })
             }
         }
         // Content-based default whenever the panel lands on a DIFFERENT note: empty → edit,

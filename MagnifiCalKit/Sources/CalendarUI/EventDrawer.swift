@@ -685,7 +685,11 @@ struct EventDrawer: View {
                                         noteEditLine = line
                                         notesMode = .edit
                                     },
-                                    attachments: engine.attachments)
+                                    attachments: engine.attachments,
+                                    onAppend: { md in
+                                        let cur = activeNote.wrappedValue
+                                        activeNote.wrappedValue = cur.isEmpty ? md : cur + "\n\n" + md
+                                    })
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity)

@@ -98,4 +98,14 @@ final class AttachmentStoreTests: XCTestCase {
         XCTAssertNil(store.url(forId: "deadbeefdeadbeef"))
         XCTAssertNil(store.meta(forId: "deadbeefdeadbeef"))
     }
+
+    func testDisplayURLIsNamedHandleOnTheSameBytes() throws {
+        let t = try store.importData(Data("copy me nicely".utf8), suggestedName: "NSF draft.txt")
+        let url = try XCTUnwrap(store.displayURL(forId: t.id))
+        XCTAssertEqual(url.lastPathComponent, "NSF draft.txt",
+                       "⌘C / Quick Look / open see the real name, not the hash")
+        XCTAssertEqual(try Data(contentsOf: url), Data("copy me nicely".utf8))
+        XCTAssertEqual(store.displayURL(forId: t.id), url, "the handle is reused, not re-made")
+        XCTAssertNil(store.displayURL(forId: "deadbeefdeadbeef"), "missing blob → nil")
+    }
 }

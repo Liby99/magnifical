@@ -177,6 +177,31 @@ public struct AttachmentMeta: Codable, Sendable, Equatable {
         return fullHash(forId: id).flatMap { index[$0] }
     }
 
+    /// A DISPLAY-NAMED handle on the blob — `files/export/<id>/<original name>`, hardlinked
+    /// (copy fallback) — so ⌘C→Finder-paste, Quick Look's title bar, and "open with default
+    /// app" all show "proposal.pdf", never a hash. Disposable, recreated on demand.
+    public func displayURL(forId id: String) -> URL? {
+        guard let blob = url(forId: id), let meta = meta(forId: id) else { return nil }
+        let dir = filesDir.appendingPathComponent("export", isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
+        let dest = dir.appendingPathComponent(meta.name)
+        if FileManager.default.fileExists(atPath: dest.path) {
+            return dest
+        }
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.linkItem(at: blob, to: dest)
+            } catch {
+                try FileManager.default.copyItem(at: blob, to: dest) // cross-volume fallback
+            }
+            return dest
+        } catch {
+            storeLog.error("attachment export link FAILED: \(error.localizedDescription, privacy: .public)")
+            return blob // worst case: the hash-named blob still previews
+        }
+    }
+
     /// A short unique id for the token: 16 hex chars, extended only on a prefix collision
     /// (astronomically unlikely; the index always holds the full hash).
     private func shortId(_ hash: String) -> String {

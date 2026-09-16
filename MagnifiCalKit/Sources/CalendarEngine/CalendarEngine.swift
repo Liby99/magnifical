@@ -433,6 +433,7 @@ public final class CalendarEngine {
     // pinch state
     var magStartZ: CGFloat = 0
     var magAccum: CGFloat = 0
+    var lastMagEvent = Date.distantPast // stamped per onMagnify call — gates the settle safety net
     // vertical-pinch timeline scale state (see onTimelineScale)
     var tlScaleStartH: CGFloat = 0
     var tlScaleAccum: CGFloat = 0
@@ -814,6 +815,18 @@ public final class CalendarEngine {
                 default: break
                 }
             }
+        } else if abs(z - z.rounded()) > 0.02, drag == nil,
+                  !scroll.liveMonthScrolling, !scroll.liveWeekScrolling, !scroll.liveDayScrolling,
+                  anim.flipAnim == nil, anim.monthAnim == nil,
+                  date.timeIntervalSince(lastMagEvent) > 0.35 {
+            // Settle safety net: every gesture-start path cancels an in-flight zoom tween
+            // (cancelTween — legitimately, so the gesture doesn't fight it), which FREEZES z
+            // wherever the settle had reached; nothing used to resume it, so a pinch-release
+            // phantom scroll (or an immediate click/scroll inside the ~0.5s settle window)
+            // left the view stuck between levels. Once everything is quiet — no tween, no
+            // drag, no live scroll/flip, and no pinch event for a beat (the time gate also
+            // self-heals a modal-swallowed pinch ending) — the settle simply resumes.
+            tweenZ(to: z.rounded())
         }
         if var st = anim.scrollTween {
             if !st.ticked { // launch glides stall the same way — same rebase (see Tween.ticked)

@@ -9,6 +9,7 @@
 import AppKit
 import CalendarEngine
 import CalendarRender
+import QuickLookUI
 import SwiftUI
 
 struct MarkdownPreview: NSViewRepresentable {
@@ -21,6 +22,9 @@ struct MarkdownPreview: NSViewRepresentable {
     /// The attachment blob store — `![@kind:name](ccfile:…)` tokens render as preview cards
     /// when present (nil = tokens render as inline chips only; the phone path has its own).
     var attachments: AttachmentStore?
+    /// Files dropped ONTO the preview import + append their tokens to the note (the preview
+    /// has no caret). nil = preview drops off.
+    var onAppend: ((String) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -117,6 +121,14 @@ struct MarkdownPreview: NSViewRepresentable {
 
         private func apply(_ doc: MarkdownDoc.Rendered) {
             guard let tv = textView else { return }
+            tv.clearAttachmentSelection() // content shifted — a stale ring would float
+            tv.attachmentStore = { [weak self] in self?.parent.attachments }
+            tv.onAppendMarkdown = parent.onAppend.map { append in
+                { [weak self] md in
+                    append(md)
+                    _ = self // keep the coordinator alive in the closure chain
+                }
+            }
             tv.lineMap = doc.lineMap
             tv.decor = doc.decor
             let base = NSColor(parent.theme.text)
@@ -337,6 +349,7 @@ final class PreviewTextView: NSTextView {
             }
         }
         super.draw(dirtyRect)
+        drawAttachmentRing() // the selected card's accent ring, above everything
     }
 
     /// Rounded on the RIGHT corners only; the left edge (under the accent bar) stays square.
@@ -354,6 +367,36 @@ final class PreviewTextView: NSTextView {
         return p
     }
 
+    // ── Attachment selection + Quick Look (P1, design §5.4) ─────────────────────────
+    var attachmentStore: (() -> AttachmentStore?)?
+    var onAppendMarkdown: ((String) -> Void)? // drop-on-preview → host appends to the note
+    /// The selected attachment CARD: its single U+FFFC character index + token id. Cleared on
+    /// outside clicks, Esc, and every re-render (content shifted under it).
+    private(set) var selectedAtt: (charIndex: Int, id: String)?
+
+    func clearAttachmentSelection() {
+        if selectedAtt != nil {
+            selectedAtt = nil
+            needsDisplay = true
+            refreshPreviewPanel()
+        }
+    }
+
+    /// The ccsel token id at a character index (the card's link carries it).
+    private func attachmentId(at idx: Int) -> String? {
+        guard idx >= 0, idx < (textStorage?.length ?? 0),
+              textStorage?.attribute(.attachment, at: idx, effectiveRange: nil) != nil,
+              let link = textStorage?.attribute(.link, at: idx, effectiveRange: nil),
+              let url = link as? URL ?? (link as? String).flatMap(URL.init(string:)),
+              url.scheme == "ccsel" else { return nil }
+        return url.lastPathComponent
+    }
+
+    private func selectedDisplayURL() -> URL? {
+        guard let sel = selectedAtt else { return nil }
+        return attachmentStore?()?.displayURL(forId: sel.id)
+    }
+
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command), let onCmdClickLine {
             let pt = convert(event.locationInWindow, from: nil)
@@ -363,7 +406,172 @@ final class PreviewTextView: NSTextView {
                 return
             }
         }
+        // Single click on an attachment card → select (Finder-style ring); double → open.
+        // Consumed — a drag starting on a card must not smear a text selection over it.
+        if let lm = layoutManager, let tc = textContainer {
+            let pt = convert(event.locationInWindow, from: nil)
+            let local = NSPoint(x: pt.x - textContainerOrigin.x, y: pt.y - textContainerOrigin.y)
+            let idx = lm.characterIndex(for: local, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
+            if let id = attachmentId(at: idx) {
+                selectedAtt = (idx, id)
+                setSelectedRange(NSRange(location: idx, length: 0)) // no text selection under the ring
+                window?.makeFirstResponder(self) // space / ⌘C target
+                needsDisplay = true
+                refreshPreviewPanel()
+                if event.clickCount >= 2, let url = attachmentStore?()?.displayURL(forId: id) {
+                    NSWorkspace.shared.open(url)
+                }
+                return
+            }
+        }
+        clearAttachmentSelection() // clicked anything else → the ring goes away
         super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if selectedAtt != nil {
+            if event.keyCode == 49 { // space — the Finder Quick Look toggle
+                togglePreviewPanel()
+                return
+            }
+            if event.keyCode == 53 { // esc
+                clearAttachmentSelection()
+                return
+            }
+        }
+        super.keyDown(with: event)
+    }
+
+    /// ⌘C with a card selected copies the REAL FILE (display-named, so a Finder paste yields
+    /// "proposal.pdf"); plain text selections keep the normal text copy.
+    override func copy(_ sender: Any?) {
+        if selectedAtt != nil, selectedRange().length == 0 {
+            guard let url = selectedDisplayURL() else { NSSound.beep(); return }
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.writeObjects([url as NSURL])
+            return
+        }
+        super.copy(sender)
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(copy(_:)), selectedAtt != nil {
+            return true // no text selection, but the card is copyable
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+
+    /// The selection ring, drawn with the decor pass (accent, rounded — the card's own corners).
+    func drawAttachmentRing() {
+        guard let sel = selectedAtt, let lm = layoutManager, let tc = textContainer,
+              sel.charIndex < (textStorage?.length ?? 0) else { return }
+        let gr = lm.glyphRange(forCharacterRange: NSRange(location: sel.charIndex, length: 1),
+                               actualCharacterRange: nil)
+        guard gr.length > 0 else { return }
+        var rect = lm.boundingRect(forGlyphRange: gr, in: tc)
+        rect = rect.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+            .insetBy(dx: -2.5, dy: -2.5)
+        let ring = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
+        NSColor(Theme.accent).withAlphaComponent(0.9).setStroke()
+        ring.lineWidth = 2.5
+        ring.stroke()
+    }
+
+    // ── Drop on the preview: import + append (the preview has no caret) ─────────────
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if onAppendMarkdown != nil, attachmentStore?() != nil,
+           fileURLsOnPasteboard(sender.draggingPasteboard) != nil {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if let append = onAppendMarkdown, let store = attachmentStore?(),
+           let urls = fileURLsOnPasteboard(sender.draggingPasteboard) {
+            let tokens = urls.compactMap { try? store.importFile($0) }
+            guard !tokens.isEmpty else { NSSound.beep(); return true }
+            append(tokens.map(\.markdown).joined(separator: "\n"))
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
+
+    private func fileURLsOnPasteboard(_ pb: NSPasteboard) -> [URL]? {
+        let urls = (pb.readObjects(forClasses: [NSURL.self],
+                                   options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        return urls.isEmpty ? nil : urls
+    }
+
+    // ── QLPreviewPanel: the responder-chain contract (byte-for-byte the Finder loop) ──
+    private func togglePreviewPanel() {
+        guard let panel = QLPreviewPanel.shared() else { return }
+        if QLPreviewPanel.sharedPreviewPanelExists(), panel.isVisible {
+            panel.orderOut(nil)
+        } else {
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    private func refreshPreviewPanel() {
+        if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared().isVisible {
+            QLPreviewPanel.shared().reloadData()
+        }
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        selectedAtt != nil
+    }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = self
+        panel.delegate = self
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = nil
+        panel.delegate = nil
+    }
+}
+
+/// The panel's one item: the display-named file, titled with the attachment's real name.
+extension PreviewTextView: QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
+        selectedAtt != nil ? 1 : 0
+    }
+
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
+        guard let sel = selectedAtt, let store = attachmentStore?(),
+              let url = store.displayURL(forId: sel.id) else { return nil }
+        return AttachmentPreviewItem(url: url, title: store.meta(forId: sel.id)?.name)
+    }
+
+    /// Zoom the panel out of the selected card's rect (the Finder genie), not from nowhere.
+    func previewPanel(_ panel: QLPreviewPanel!, sourceFrameOnScreenFor item: (any QLPreviewItem)!) -> NSRect {
+        guard let sel = selectedAtt, let lm = layoutManager, let tc = textContainer,
+              let win = window else { return .zero }
+        let gr = lm.glyphRange(forCharacterRange: NSRange(location: sel.charIndex, length: 1),
+                               actualCharacterRange: nil)
+        var rect = lm.boundingRect(forGlyphRange: gr, in: tc)
+            .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        rect = convert(rect, to: nil)
+        return win.convertToScreen(rect)
+    }
+
+    /// Keyboard flows to the panel while it's up; esc/space close it natively.
+    func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
+        false
+    }
+}
+
+private final class AttachmentPreviewItem: NSObject, QLPreviewItem {
+    let previewItemURL: URL!
+    let previewItemTitle: String!
+
+    init(url: URL, title: String?) {
+        previewItemURL = url
+        previewItemTitle = title ?? url.lastPathComponent
     }
 }
 
