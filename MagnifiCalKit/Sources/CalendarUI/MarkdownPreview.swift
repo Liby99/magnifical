@@ -527,9 +527,16 @@ final class PreviewTextView: NSTextView {
         let gr = lm.glyphRange(forCharacterRange: NSRange(location: charIndex, length: 1),
                                actualCharacterRange: nil)
         guard gr.length > 0 else { return }
-        let rect = lm.boundingRect(forGlyphRange: gr, in: tc)
+        var rect = lm.boundingRect(forGlyphRange: gr, in: tc)
             .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
-            .insetBy(dx: -2.5, dy: -2.5)
+        // boundingRect spans the LINE FRAGMENT — line spacing and descender room hang below
+        // the card, pushing the ring's bottom edge away from the pixels. Clamp the height to
+        // the attachment's actual card size (top edge is true in flipped coordinates).
+        if let att = textStorage?.attribute(.attachment, at: charIndex, effectiveRange: nil)
+            as? NSTextAttachment, att.bounds.height > 0 {
+            rect.size.height = att.bounds.height
+        }
+        rect = rect.insetBy(dx: -2.5, dy: -2.5)
         let ring = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
         NSColor(Theme.accent).withAlphaComponent(alpha).setStroke()
         ring.lineWidth = width
