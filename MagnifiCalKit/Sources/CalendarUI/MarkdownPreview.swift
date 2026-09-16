@@ -373,13 +373,65 @@ final class PreviewTextView: NSTextView {
     /// The selected attachment CARD: its single U+FFFC character index + token id. Cleared on
     /// outside clicks, Esc, and every re-render (content shifted under it).
     private(set) var selectedAtt: (charIndex: Int, id: String)?
+    /// The card under the cursor — a LIGHTER accent ring (hover affordance for "this is an
+    /// object you can click"). Tracked via mouseMoved; never shown on the selected card.
+    private var hoveredAtt: Int? // charIndex
+    private var hoverTracking: NSTrackingArea?
 
     func clearAttachmentSelection() {
+        hoveredAtt = nil
         if selectedAtt != nil {
             selectedAtt = nil
             needsDisplay = true
             refreshPreviewPanel()
         }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTracking {
+            removeTrackingArea(hoverTracking)
+        }
+        let t = NSTrackingArea(rect: .zero,
+                               options: [.mouseMoved, .mouseEnteredAndExited,
+                                         .activeInKeyWindow, .inVisibleRect],
+                               owner: self)
+        addTrackingArea(t)
+        hoverTracking = t
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        let hit = attachmentHit(event)?.charIndex
+        if hit != hoveredAtt {
+            hoveredAtt = hit
+            needsDisplay = true
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        if hoveredAtt != nil {
+            hoveredAtt = nil
+            needsDisplay = true
+        }
+    }
+
+    /// The attachment card under a mouse event, if any.
+    private func attachmentHit(_ event: NSEvent) -> (charIndex: Int, id: String)? {
+        guard let lm = layoutManager, let tc = textContainer else { return nil }
+        let pt = convert(event.locationInWindow, from: nil)
+        let local = NSPoint(x: pt.x - textContainerOrigin.x, y: pt.y - textContainerOrigin.y)
+        let idx = lm.characterIndex(for: local, in: tc,
+                                    fractionOfDistanceBetweenInsertionPoints: nil)
+        guard let id = attachmentId(at: idx) else { return nil }
+        // characterIndex snaps to the NEAREST glyph — verify the point is really on the card.
+        let gr = lm.glyphRange(forCharacterRange: NSRange(location: idx, length: 1),
+                               actualCharacterRange: nil)
+        let rect = lm.boundingRect(forGlyphRange: gr, in: tc)
+            .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        guard rect.insetBy(dx: -2, dy: -2).contains(pt) else { return nil }
+        return (idx, id)
     }
 
     /// The ccsel token id at a character index (the card's link carries it).
@@ -408,21 +460,17 @@ final class PreviewTextView: NSTextView {
         }
         // Single click on an attachment card → select (Finder-style ring); double → open.
         // Consumed — a drag starting on a card must not smear a text selection over it.
-        if let lm = layoutManager, let tc = textContainer {
-            let pt = convert(event.locationInWindow, from: nil)
-            let local = NSPoint(x: pt.x - textContainerOrigin.x, y: pt.y - textContainerOrigin.y)
-            let idx = lm.characterIndex(for: local, in: tc, fractionOfDistanceBetweenInsertionPoints: nil)
-            if let id = attachmentId(at: idx) {
-                selectedAtt = (idx, id)
-                setSelectedRange(NSRange(location: idx, length: 0)) // no text selection under the ring
-                window?.makeFirstResponder(self) // space / ⌘C target
-                needsDisplay = true
-                refreshPreviewPanel()
-                if event.clickCount >= 2, let url = attachmentStore?()?.displayURL(forId: id) {
-                    NSWorkspace.shared.open(url)
-                }
-                return
+        if let hit = attachmentHit(event) {
+            selectedAtt = hit
+            hoveredAtt = nil // the strong ring replaces the hover ring
+            setSelectedRange(NSRange(location: hit.charIndex, length: 0)) // no text selection under the ring
+            window?.makeFirstResponder(self) // space / ⌘C target
+            needsDisplay = true
+            refreshPreviewPanel()
+            if event.clickCount >= 2, let url = attachmentStore?()?.displayURL(forId: hit.id) {
+                NSWorkspace.shared.open(url)
             }
+            return
         }
         clearAttachmentSelection() // clicked anything else → the ring goes away
         super.mouseDown(with: event)
@@ -462,19 +510,29 @@ final class PreviewTextView: NSTextView {
         return super.validateUserInterfaceItem(item)
     }
 
-    /// The selection ring, drawn with the decor pass (accent, rounded — the card's own corners).
+    /// The selection ring (strong accent) + the hover ring (same shape, lighter and thinner),
+    /// drawn above the cards. Hover never shows on the selected card.
     func drawAttachmentRing() {
-        guard let sel = selectedAtt, let lm = layoutManager, let tc = textContainer,
-              sel.charIndex < (textStorage?.length ?? 0) else { return }
-        let gr = lm.glyphRange(forCharacterRange: NSRange(location: sel.charIndex, length: 1),
+        if let hov = hoveredAtt, hov != selectedAtt?.charIndex {
+            ring(at: hov, alpha: 0.45, width: 1.5)
+        }
+        if let sel = selectedAtt {
+            ring(at: sel.charIndex, alpha: 0.9, width: 2.5)
+        }
+    }
+
+    private func ring(at charIndex: Int, alpha: CGFloat, width: CGFloat) {
+        guard let lm = layoutManager, let tc = textContainer,
+              charIndex < (textStorage?.length ?? 0) else { return }
+        let gr = lm.glyphRange(forCharacterRange: NSRange(location: charIndex, length: 1),
                                actualCharacterRange: nil)
         guard gr.length > 0 else { return }
-        var rect = lm.boundingRect(forGlyphRange: gr, in: tc)
-        rect = rect.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        let rect = lm.boundingRect(forGlyphRange: gr, in: tc)
+            .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
             .insetBy(dx: -2.5, dy: -2.5)
         let ring = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
-        NSColor(Theme.accent).withAlphaComponent(0.9).setStroke()
-        ring.lineWidth = 2.5
+        NSColor(Theme.accent).withAlphaComponent(alpha).setStroke()
+        ring.lineWidth = width
         ring.stroke()
     }
 
