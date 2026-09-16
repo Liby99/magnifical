@@ -15,9 +15,9 @@ import UniformTypeIdentifiers
     // nonisolated: referenced from nonisolated default-argument position (MarkdownDoc.render).
     nonisolated static let solitaryMaxW: CGFloat = 480
     nonisolated static let gridCellW: CGFloat = 224
-    nonisolated static let gridCellH: CGFloat = 150
+    nonisolated static let gridCellH: CGFloat = 128
     nonisolated static let metaH: CGFloat = 70
-    private static let imageMaxH: CGFloat = 340
+    private static let imageMaxH: CGFloat = 240
     private static let corner: CGFloat = 8
 
     private static let cache = NSCache<NSString, NSImage>()
@@ -137,7 +137,7 @@ import UniformTypeIdentifiers
     private static func textCard(_ text: String, ext: String, name: String, bytes: Int,
                                  width: CGFloat, compact: Bool, theme: Theme) -> NSImage {
         let headerH: CGFloat = compact ? 24 : 28
-        let lineCount = compact ? 4 : 10
+        let lineCount = compact ? 4 : 8
         let font = NSFont(name: "Menlo", size: compact ? 9 : 11)
             ?? NSFont.monospacedSystemFont(ofSize: compact ? 9 : 11, weight: .regular)
         let lines = text.components(separatedBy: "\n").prefix(lineCount).joined(separator: "\n")
