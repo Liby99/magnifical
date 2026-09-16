@@ -594,36 +594,7 @@ final class PreviewTextView: NSTextView {
     /// The drop overlay, drawn over the VISIBLE viewport (the document may be far taller).
     func drawDropTarget() {
         guard dropTargetActive else { return }
-        let vis = visibleRect
-        // Dimmed mask (the material wash, in draw-pass form: the pane's ground at ~72%).
-        (NSColor(Theme.accent).withAlphaComponent(0.04)).setFill()
-        vis.fill()
-        NSColor.windowBackgroundColor.withAlphaComponent(0.72).setFill()
-        vis.fill()
-        // Dashed inner ring, the .ics overlay's stroke.
-        let ringRect = vis.insetBy(dx: 12, dy: 12)
-        let ring = NSBezierPath(roundedRect: ringRect, xRadius: 14, yRadius: 14)
-        ring.setLineDash([12, 8], count: 2, phase: 0)
-        ring.lineWidth = 3
-        NSColor(Theme.accent).withAlphaComponent(0.85).setStroke()
-        ring.stroke()
-        // Centered ＋ over "Add Attachment".
-        let accent = NSColor(Theme.accent)
-        let plusAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 40, weight: .medium), .foregroundColor: accent,
-        ]
-        let labelAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 17, weight: .semibold), .foregroundColor: accent,
-        ]
-        let plus = "+" as NSString
-        let label = "Add Attachment" as NSString
-        let plusSize = plus.size(withAttributes: plusAttrs)
-        let labelSize = label.size(withAttributes: labelAttrs)
-        let totalH = plusSize.height + 6 + labelSize.height
-        let top = vis.midY - totalH / 2
-        plus.draw(at: NSPoint(x: vis.midX - plusSize.width / 2, y: top), withAttributes: plusAttrs)
-        label.draw(at: NSPoint(x: vis.midX - labelSize.width / 2, y: top + plusSize.height + 6),
-                   withAttributes: labelAttrs)
+        AttachmentDropOverlay.draw(in: visibleRect)
     }
 
     private func fileURLsOnPasteboard(_ pb: NSPasteboard) -> [URL]? {

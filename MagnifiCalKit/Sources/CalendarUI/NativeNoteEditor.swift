@@ -132,7 +132,7 @@ struct NativeNoteEditor: NSViewRepresentable {
             return false
         }
 
-        private func importFiles(_ urls: [URL], at index: Int) {
+        func importFiles(_ urls: [URL], at index: Int) {
             guard let store = attachmentStore?() else { return }
             var tokens: [AttachmentToken] = []
             for url in urls {
@@ -386,6 +386,68 @@ struct NativeNoteEditor: NSViewRepresentable {
         MarkdownHighlight.baseAttributes(color)
     }
 
+    /// The editor's scroll view doubles as the MARGIN drop target: a short note in a tall
+    /// pane leaves empty scroll area BELOW the text view, where drags used to dead-end (the
+    /// text view only spans its content). Drags there show the shared "＋ Add Attachment"
+    /// overlay and drop-append at the END of the note; drags over the text itself stay with
+    /// the text view's caret-positioned drop (no overlay), because AppKit routes a drag to
+    /// the deepest registered view — this scroll view only ever hears the margin.
+    final class MarginDropScrollView: NSScrollView {
+        var store: (() -> AttachmentStore?)?
+        var onDropAtEnd: (([URL]) -> Void)?
+        private let overlay = OverlayView()
+
+        /// Draw-only overlay above the clip view (never a hit-test target).
+        final class OverlayView: NSView {
+            override func hitTest(_: NSPoint) -> NSView? {
+                nil
+            }
+
+            override func draw(_: NSRect) {
+                AttachmentDropOverlay.draw(in: bounds)
+            }
+        }
+
+        func installMarginDrop() {
+            registerForDraggedTypes([.fileURL])
+            overlay.isHidden = true
+            overlay.frame = bounds
+            overlay.autoresizingMask = [.width, .height]
+            addSubview(overlay, positioned: .above, relativeTo: nil)
+        }
+
+        private func urls(_ pb: NSPasteboard) -> [URL]? {
+            let u = (pb.readObjects(forClasses: [NSURL.self],
+                                    options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+            return u.isEmpty ? nil : u
+        }
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            if store?() != nil, urls(sender.draggingPasteboard) != nil {
+                overlay.isHidden = false
+                return .copy
+            }
+            return super.draggingEntered(sender)
+        }
+
+        override func draggingExited(_ sender: NSDraggingInfo?) {
+            overlay.isHidden = true
+            super.draggingExited(sender)
+        }
+
+        override func draggingEnded(_ sender: NSDraggingInfo) {
+            overlay.isHidden = true
+            super.draggingEnded(sender)
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            overlay.isHidden = true
+            guard let dropped = urls(sender.draggingPasteboard) else { return false }
+            onDropAtEnd?(dropped)
+            return true
+        }
+    }
+
     func makeNSView(context: Context) -> NSScrollView {
         let tv = EditorTextView()
         tv.isRichText = false
@@ -426,7 +488,13 @@ struct NativeNoteEditor: NSViewRepresentable {
         context.coordinator.key = storageKey
         context.coordinator.highlight()
 
-        let scroll = NSScrollView()
+        let scroll = MarginDropScrollView()
+        scroll.store = { [weak co = context.coordinator] in co?.parent.attachments }
+        scroll.onDropAtEnd = { [weak tv] urls in
+            guard let tv else { return }
+            tv.importFiles(urls, at: (tv.string as NSString).length) // append after the last line
+        }
+        scroll.installMarginDrop()
         scroll.documentView = tv
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
