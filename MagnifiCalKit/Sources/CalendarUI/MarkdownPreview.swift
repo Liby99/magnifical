@@ -863,8 +863,13 @@ private final class AttachmentPreviewItem: NSObject, QLPreviewItem {
                                             to out: inout NSMutableAttributedString,
                                             lineMap: inout [(NSRange, Int)], theme: Theme) {
         let compact = run.count > 1
-        let para = paragraph(spacing: 9)
+        let para = paragraph(spacing: 12) // room below the card row
+        para.paragraphSpacingBefore = 8 // …and above (text otherwise butts the card)
         para.lineSpacing = 8 // grid rows breathe
+        // The pane renders flush-left (zero container inset / fragment padding), which CLIPPED
+        // the card's left hairline + selection ring at x=0 — indent the card row a touch.
+        para.firstLineHeadIndent = 4
+        para.headIndent = 4
         for (i, entry) in run.enumerated() {
             let from = out.length
             let img = AttachmentCards.card(for: entry.token, store: store,
