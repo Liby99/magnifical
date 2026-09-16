@@ -18,6 +18,9 @@ struct MarkdownPreview: NSViewRepresentable {
     var active = true
     var onToggle: ((Int) -> Void)? // 1-based source line of a tapped todo checkbox
     var onLineEdit: ((Int) -> Void)? // ⌘-click → edit at this source line
+    /// The attachment blob store — `![@kind:name](ccfile:…)` tokens render as preview cards
+    /// when present (nil = tokens render as inline chips only; the phone path has its own).
+    var attachments: AttachmentStore?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -47,6 +50,19 @@ struct MarkdownPreview: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         scroll.autohidesScrollers = true
+        // Attachment cards size to the pane (480pt cap / grid columns): a resize that crosses
+        // a width BUCKET re-renders — SwiftUI won't call updateNSView for pure AppKit-side
+        // frame changes, so the coordinator listens for them itself.
+        scroll.postsFrameChangedNotifications = true
+        context.coordinator.frameObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: scroll, queue: .main
+        ) { [weak coordinator = context.coordinator] _ in
+            MainActor.assumeIsolated {
+                if let c = coordinator {
+                    c.rebuild(c.parent)
+                }
+            }
+        }
         context.coordinator.rebuild(self)
         return scroll
     }
@@ -59,6 +75,7 @@ struct MarkdownPreview: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MarkdownPreview
         weak var textView: PreviewTextView?
+        var frameObserver: Any? // width-bucket re-render (attachment cards track the pane)
         private var renderedKey = "\u{0}"
         private var sweep: TodoSweep? // in-flight strikethrough sweep (one at a time)
 
@@ -66,14 +83,26 @@ struct MarkdownPreview: NSViewRepresentable {
             self.parent = parent
         }
 
+        deinit {
+            if let frameObserver {
+                NotificationCenter.default.removeObserver(frameObserver)
+            }
+        }
+
         func rebuild(_ p: MarkdownPreview) {
             parent = p
-            guard textView != nil else { return } // apply() below re-binds it after the render
-            let key = p.text + "|" + NSColor(p.theme.text).description
+            guard let tv = textView else { return } // apply() below re-binds it after the render
+            // Cards width-clamp to the pane; quantize so only real crossings re-render.
+            let paneW = tv.enclosingScrollView?.bounds.width ?? tv.bounds.width
+            let bucket = paneW > 40 ? Int((paneW / 64).rounded()) : 0
+            let cardW = bucket > 0 ? min(AttachmentCards.solitaryMaxW, CGFloat(bucket) * 64 - 24)
+                : AttachmentCards.solitaryMaxW
+            let key = p.text + "|" + NSColor(p.theme.text).description + "|w\(bucket)"
             guard key != renderedKey else { return }
             renderedKey = key
             let doc = NativeDash.diagTime("MarkdownDoc.render(\(p.text.count)ch)") {
-                MarkdownDoc.render(p.text, theme: p.theme, interactive: p.onToggle != nil)
+                MarkdownDoc.render(p.text, theme: p.theme, interactive: p.onToggle != nil,
+                                   attachments: p.attachments, cardWidth: cardW)
             }
             // A checkbox toggle's own re-render arrives WHILE its strike sweep animates: stash
             // it and let the sweep finish over the old content — the panels' two-copy mask
@@ -108,6 +137,9 @@ struct MarkdownPreview: NSViewRepresentable {
                 startSweep(line: line, clickIndex: charIndex)
                 parent.onToggle?(line)
                 return true
+            }
+            if url.scheme == "ccsel" {
+                return true // attachment card — consumed (P1 adds selection/QuickLook here)
             }
             return false // real links → AppKit opens them
         }
@@ -337,7 +369,7 @@ final class PreviewTextView: NSTextView {
 
 // ── The document builder ─────────────────────────────────────────────────────────────────────
 
-enum MarkdownDoc {
+@MainActor enum MarkdownDoc { // main-actor: renders attachment cards (AppKit drawing + store)
     enum DecorKind { case code, quote, managed, rule }
 
     struct Rendered {
@@ -376,7 +408,9 @@ enum MarkdownDoc {
     static let codeFont = NSFont(name: "Menlo", size: 12.5)
         ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
 
-    static func render(_ text: String, theme: Theme, interactive: Bool) -> Rendered {
+    static func render(_ text: String, theme: Theme, interactive: Bool,
+                       attachments: AttachmentStore? = nil,
+                       cardWidth: CGFloat = AttachmentCards.solitaryMaxW) -> Rendered {
         var out = NSMutableAttributedString()
         var lineMap: [(NSRange, Int)] = []
         var decor: [(NSRange, DecorKind)] = []
@@ -400,7 +434,8 @@ enum MarkdownDoc {
         }
         let startLine = managedRaw.isEmpty ? 1 : userStartLine(userText, in: text)
         appendBlocks(userText, startLine: startLine, to: &out, lineMap: &lineMap, decor: &decor,
-                     base: base, accent: accent, theme: theme, interactive: interactive)
+                     base: base, accent: accent, theme: theme, interactive: interactive,
+                     attachments: attachments, cardWidth: cardWidth)
         // Bottom breathing room (user spec): a trailing spacer paragraph — inset is symmetric,
         // so the extra tail lives in the document itself.
         let tail = NSMutableParagraphStyle()
@@ -425,7 +460,9 @@ enum MarkdownDoc {
                                      lineMap: inout [(NSRange, Int)],
                                      decor: inout [(NSRange, DecorKind)],
                                      base: NSColor, accent: NSColor, theme: Theme,
-                                     interactive: Bool) {
+                                     interactive: Bool,
+                                     attachments: AttachmentStore? = nil,
+                                     cardWidth: CGFloat = AttachmentCards.solitaryMaxW) {
         let lines = source.components(separatedBy: "\n")
         var i = 0
         var codeLang = ""
@@ -493,6 +530,24 @@ enum MarkdownDoc {
             }
             if line.isEmpty {
                 flushText()
+                continue
+            }
+
+            // Attachment cards (design §5.3–5.4): a token ALONE on its line is a block card,
+            // and a run of consecutive token lines becomes the ≤3-column grid — the compact
+            // cells flow as wrapping attachment glyphs, so the text system's own line wrap IS
+            // the grid and the column count follows the pane width.
+            if let store = attachments, let first = AttachmentTokens.blockToken(line: line) {
+                flushText()
+                var run: [(line: Int, token: AttachmentToken)] = [(srcLine, first)]
+                while i + 1 < lines.count,
+                      let next = AttachmentTokens.blockToken(
+                          line: lines[i + 1].trimmingCharacters(in: .whitespaces)) {
+                    i += 1
+                    run.append((startLine + i, next))
+                }
+                appendAttachmentRun(run, store: store, cardWidth: cardWidth,
+                                    to: &out, lineMap: &lineMap, theme: theme)
                 continue
             }
 
@@ -590,6 +645,42 @@ enum MarkdownDoc {
     }
 
     // ── Block renderers ──────────────────────────────────────────────────────────────────────
+
+    /// A run of consecutive attachment tokens → cards. One token = a solitary content card
+    /// (min(480, pane) wide); several = compact ~224×150 cells emitted on ONE paragraph with
+    /// glue spaces, so line wrapping produces the responsive ≤3-column grid. Every card
+    /// carries a `ccsel://<line>/<id>` link (P1's selection/Quick Look hook; P0 consumes it).
+    private static func appendAttachmentRun(_ run: [(line: Int, token: AttachmentToken)],
+                                            store: AttachmentStore, cardWidth: CGFloat,
+                                            to out: inout NSMutableAttributedString,
+                                            lineMap: inout [(NSRange, Int)], theme: Theme) {
+        let compact = run.count > 1
+        let para = paragraph(spacing: 9)
+        para.lineSpacing = 8 // grid rows breathe
+        for (i, entry) in run.enumerated() {
+            let from = out.length
+            let img = AttachmentCards.card(for: entry.token, store: store,
+                                           width: compact ? AttachmentCards.gridCellW : cardWidth,
+                                           compact: compact, theme: theme)
+            let att = NSTextAttachment()
+            att.image = img
+            att.bounds = CGRect(origin: .zero, size: img.size)
+            let cell = NSMutableAttributedString(attachment: att)
+            cell.addAttributes([
+                .link: URL(string: "ccsel://\(entry.line)/\(entry.token.id)") ?? URL(fileURLWithPath: "/"),
+                .cursor: NSCursor.pointingHand,
+                .paragraphStyle: para,
+            ], range: NSRange(location: 0, length: cell.length))
+            out.append(cell)
+            if compact, i < run.count - 1 {
+                out.append(NSAttributedString(string: "  ", attributes: [
+                    .font: bodyFont(), .paragraphStyle: para,
+                ])) // glue between cells — wrap points for the grid
+            }
+            lineMap.append((NSRange(location: from, length: out.length - from), entry.line))
+        }
+        out.append(newline(para))
+    }
 
     private static func appendTodo(_ text: String, done: Bool, line: Int, indent: Int,
                                    to out: inout NSMutableAttributedString,
@@ -876,6 +967,15 @@ enum MarkdownDoc {
     /// italic, ~~strike~~, `code` (Menlo + wash), [links](…) in the ACCENT color, underlined.
     static func inline(_ s: String, font: NSFont, color: NSColor, accent: NSColor,
                        para: NSParagraphStyle) -> NSAttributedString {
+        // MID-LINE attachment tokens (rare — paste always writes block form) render as a
+        // small text chip: 📎 + display name in accent. Foundation's inline markdown parser
+        // would otherwise swallow the image syntax and leave confusing bare text.
+        var s = s
+        for m in AttachmentTokens.matches(in: s).reversed() {
+            if let r = Range(m.range, in: s) {
+                s.replaceSubrange(r, with: "📎 \(m.token.name)")
+            }
+        }
         let parsed = (try? AttributedString(
             markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         ))

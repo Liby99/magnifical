@@ -187,7 +187,9 @@ extension CalendarEngine {
                     people.insert(String(m.1))
                 }
                 for m in line.matches(of: #/(?:^|\s)#([\w-]+)/#) {
-                    tags.insert(String(m.1))
+                    // Lower-cased: `#` completion suggests each tag ONCE, in its canonical
+                    // lower-case form (matching the tag filter's merged, lower-case universe).
+                    tags.insert(String(m.1).lowercased())
                 }
             }
         }

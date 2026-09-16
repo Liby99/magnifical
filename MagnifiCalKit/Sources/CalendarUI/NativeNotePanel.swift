@@ -78,7 +78,8 @@ struct NativeNotePanel: View {
                     dueAnchor: { scope == "day" ? ("this day", key) : nil },
                     focusLine: pendingEditLine,
                     onFocusLineHandled: { pendingEditLine = nil },
-                    focusPulse: editorFocusSeq
+                    focusPulse: editorFocusSeq,
+                    attachments: engine.attachments
                 )
             } else if text.trimmingCharacters(in: .whitespaces).isEmpty {
                 Text(
@@ -116,7 +117,8 @@ struct NativeNotePanel: View {
                                 onLineEdit: { line in
                                     pendingEditLine = line
                                     noteMode = .edit
-                                })
+                                },
+                                attachments: engine.attachments)
             }
         }
         // Content-based default whenever the panel lands on a DIFFERENT note: empty → edit,

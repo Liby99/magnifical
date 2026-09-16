@@ -40,6 +40,9 @@ public final class CalendarEngine {
     public let renderClock = RenderClock()
     /// Observable note-edit generation — see NoteEditGen. Bumped by setDailyNote.
     public let noteEdits = NoteEditGen()
+    /// The GLOBAL attachment blob store (shared across calendars — see AttachmentStore). Lazy
+    /// so tests' CC_DEMO_DATADIR redirect is in place before the base dir is captured.
+    public private(set) lazy var attachments = AttachmentStore()
     private var sleepWork: DispatchWorkItem?
 
     /// Kick the render loop — call at every input / animation-start / edit entry point. Cheap +

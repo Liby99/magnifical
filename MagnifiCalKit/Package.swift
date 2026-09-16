@@ -42,6 +42,7 @@ let package = Package(
         .executableTarget(name: "CalendarMac", dependencies: ["CalendarUI"]),
         .executableTarget(name: "AssistantEvalRunner", dependencies: ["CalendarUI"]),
         .testTarget(name: "CalendarGeometryTests", dependencies: ["CalendarGeometry"]),
+        .testTarget(name: "CalendarUITests", dependencies: ["CalendarUI"]),
         .testTarget(
             name: "CalendarRenderTests",
             dependencies: ["CalendarRender", "CalendarEngine", "CalendarGeometry"]

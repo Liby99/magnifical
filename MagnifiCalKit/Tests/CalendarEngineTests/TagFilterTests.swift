@@ -87,7 +87,7 @@ final class TagFilterTests: XCTestCase {
         let uni = e.tagUniverse()
         let workRow = uni.rows.first { $0.key == "work" }
         XCTAssertEqual(workRow?.count, 3, "'Work'/'work' dedupe to one key counted per item")
-        XCTAssertEqual(workRow?.label, "Work", "label keeps first-seen casing")
+        XCTAssertEqual(workRow?.label, "work", "labels are lower-cased (case variants merge visibly)")
         XCTAssertEqual(uni.rows.first?.key, "work", "count-ordered: 'work'(3) first")
         XCTAssertEqual(uni.untagged, 1)
     }

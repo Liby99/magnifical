@@ -48,6 +48,10 @@
             #"(^|\s)(due:\S+|start:\S+|tz:\S+|color:\S+|done:\S+|created:\S+|followup:\S+|p:!{1,5}|#[A-Za-z0-9_][\w-]*|@[A-Za-z0-9_][\w:-]*|project:[A-Za-z0-9_-]+)(?=\s|$)"#
         )
         private static let linkRe = Re2(#"\[[^\]]*\]\([^)\s]+\)"#)
+        // The attachment token: `![@kind:name](ccfile:hex)` — the @kind:name span reads as an
+        // OBJECT pill (accent over a wash), the (ccfile:…) plumbing dims. Applied after linkRe
+        // (which also matches the bracket part) so these attributes win the overlap.
+        private static let ccfileRe = Re2(#"!\[(@[A-Za-z]+:[^\]]*)\]\((ccfile:[0-9a-f]{16,64})\)"#)
         private static let boldRe = Re2(#"\*\*[^*\n]+\*\*|__[^_\n]+__"#)
         private static let emRe = Re2(#"(?<![*_\w])(\*|_)(?![*_\s])[^*_\n]+\1(?![*_\w])"#)
         private static let strikeSpanRe = Re2(#"~~[^~\n]+~~"#)
@@ -79,6 +83,14 @@
             }
             for r in linkRe.ranges(line) {
                 out.append((r, [.foregroundColor: accent]))
+            }
+            for m in ccfileRe.groupRanges(line) {
+                out.append((m.whole, [.foregroundColor: dim])) // brackets/bang recede
+                out.append((m.g1, [ // @kind:name — the object pill
+                    .foregroundColor: accent,
+                    .backgroundColor: accent.withAlphaComponent(0.12),
+                ]))
+                out.append((m.g2, [.foregroundColor: dim])) // ccfile:hash plumbing
             }
             if quoteLineRe.matches(line) {
                 out.append((whole, [
@@ -121,6 +133,13 @@
         func ranges(_ s: String) -> [NSRange] {
             rx.matches(in: s, range: NSRange(location: 0, length: (s as NSString).length))
                 .map(\.range)
+        }
+
+        /// Matches with the whole range + capture groups 1 and 2 (the attachment-token rule).
+        func groupRanges(_ s: String) -> [(whole: NSRange, g1: NSRange, g2: NSRange)] {
+            rx.matches(in: s, range: NSRange(location: 0, length: (s as NSString).length))
+                .filter { $0.numberOfRanges >= 3 }
+                .map { ($0.range, $0.range(at: 1), $0.range(at: 2)) }
         }
     }
 #endif

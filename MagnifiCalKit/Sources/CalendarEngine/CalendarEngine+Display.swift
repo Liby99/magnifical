@@ -239,7 +239,9 @@ extension CalendarEngine {
                 if var e = counts[key] {
                     e.count += 1; counts[key] = e
                 } else {
-                    counts[key] = (t.trimmingCharacters(in: .whitespaces), 1)
+                    // Label = the lowercased key: case variants ("Grant"/"grant") merge into
+                    // ONE row and the filter list reads uniformly lower-case.
+                    counts[key] = (key, 1)
                 }
             }
             if seen.isEmpty {

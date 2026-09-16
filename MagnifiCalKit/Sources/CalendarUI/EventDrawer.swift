@@ -661,7 +661,8 @@ struct EventDrawer: View {
                         dueAnchor: { engine.dueAnchorString(id).map { ("this event time", $0) } },
                         focusLine: noteEditLine,
                         onFocusLineHandled: { noteEditLine = nil },
-                        focusPulse: notesFocusPulse
+                        focusPulse: notesFocusPulse,
+                        attachments: engine.attachments
                     )
                 } else {
                     MarkdownPreview(text: activeNote.wrappedValue, theme: theme,
@@ -683,7 +684,8 @@ struct EventDrawer: View {
                                     onLineEdit: { line in
                                         noteEditLine = line
                                         notesMode = .edit
-                                    })
+                                    },
+                                    attachments: engine.attachments)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity)

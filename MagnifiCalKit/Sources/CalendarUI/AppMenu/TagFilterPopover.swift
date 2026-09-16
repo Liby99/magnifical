@@ -1,7 +1,8 @@
 // View ▸ Filter by Tags — a stay-open checklist popover (macOS menus can't stay open while multi-toggling;
-// see the AppMenu notes). Shows the 10 most-used tags by default with a search field to reach the rest;
-// the tag universe is served from the engine's per-edit cache (CalendarEngine.tagUniverse). Toggling a row
-// writes the hidden-tags pref and repaints the calendar (.calendarViewPrefsChanged → engine.viewPrefsChanged).
+// see the AppMenu notes). EVERY tag shows (lower-cased, case variants merged), most-used first, in a
+// vertical scroll; the search field narrows the list. The tag universe is served from the engine's
+// per-edit cache (CalendarEngine.tagUniverse). Toggling a row writes the hidden-tags pref and repaints
+// the calendar (.calendarViewPrefsChanged → engine.viewPrefsChanged).
 
 import CalendarEngine
 import SwiftUI
@@ -44,10 +45,9 @@ public struct TagFilterPopover: View {
         let uni = engine.tagUniverse()
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         let searching = !q.isEmpty
-        // Idle → the 10 most-used tags; searching → every match across the full (cached) universe.
-        let rows = searching
-            ? uni.rows.filter { $0.key.contains(q) || $0.label.lowercased().contains(q) }
-            : Array(uni.rows.prefix(10))
+        // ALL tags, most-used first (the old top-10 cap was an app-menu-era limit); the
+        // search just narrows the list.
+        let rows = searching ? uni.rows.filter { $0.key.contains(q) } : uni.rows
         let showUntagged = uni.untagged > 0 && (!searching || "untagged".contains(q))
         let allKeys = Set(uni.rows.map(\.key) + (uni.untagged > 0 ? [CalendarEngine.untaggedKey] : []))
         let theme = Theme(dark: scheme == .dark)
@@ -66,14 +66,13 @@ public struct TagFilterPopover: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(theme.text.opacity(0.08)))
 
             if !searching, !uni.rows.isEmpty {
-                Text(uni.rows.count > 10 ? "Top 10 of \(uni.rows.count) tags — search for more"
-                    : "\(uni.rows.count) tag\(uni.rows.count == 1 ? "" : "s")")
+                Text("\(uni.rows.count) tag\(uni.rows.count == 1 ? "" : "s")")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
 
             // Tag rows (✓ = shown). A checkbox toggle keeps the popover open on each click.
             ScrollView {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 7) { // airier rows (was 3)
                     if rows.isEmpty, !showUntagged {
                         Text(searching ? "No matching tags" : "No tags yet")
                             .font(.system(size: 12)).foregroundStyle(.secondary).padding(.vertical, 6)
@@ -112,5 +111,6 @@ public struct TagFilterPopover: View {
             Spacer(minLength: 8)
             Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary)
         }
+        .padding(.vertical, 1.5) // a touch taller per row
     }
 }

@@ -51,6 +51,9 @@ struct NativeNoteEditor: NSViewRepresentable {
     var onFocusLineHandled: () -> Void = {}
     /// Bump → take keyboard focus (the drawer's notes ring / ⌘E entry), caret left in place.
     var focusPulse: Int = 0
+    /// The attachment blob store: paste/drag of files or images imports them and inserts
+    /// `![@kind:name](ccfile:…)` tokens at the caret. nil = attachments off (plain paste).
+    var attachments: AttachmentStore?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -69,6 +72,105 @@ struct NativeNoteEditor: NSViewRepresentable {
         var onEscKey: (() -> Void)?
         var placeholderText = ""
         var themeText: NSColor = .labelColor
+        var attachmentStore: (() -> AttachmentStore?)?
+
+        // ── Attachment import: paste / drag (design §5.1) ─────────────────────────────
+        /// ⌘V with files or image/PDF DATA on the pasteboard → import into the blob store and
+        /// insert tokens at the caret; anything else falls through to the plain-text paste.
+        override func paste(_ sender: Any?) {
+            if importFromPasteboard(NSPasteboard.general, at: selectedRange().location) {
+                return
+            }
+            super.paste(sender)
+        }
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+                return .copy
+            }
+            return super.draggingEntered(sender)
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            if attachmentStore?() != nil, let urls = fileURLs(on: sender.draggingPasteboard) {
+                let p = convert(sender.draggingLocation, from: nil)
+                importFiles(urls, at: characterIndexForInsertion(at: p))
+                return true
+            }
+            return super.performDragOperation(sender)
+        }
+
+        private func fileURLs(on pb: NSPasteboard) -> [URL]? {
+            let urls = (pb.readObjects(forClasses: [NSURL.self],
+                                       options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+            return urls.isEmpty ? nil : urls
+        }
+
+        /// True = consumed. Files win over data flavors (a Finder copy carries both).
+        private func importFromPasteboard(_ pb: NSPasteboard, at index: Int) -> Bool {
+            guard let store = attachmentStore?() else { return false }
+            if let urls = fileURLs(on: pb) {
+                importFiles(urls, at: index)
+                return true
+            }
+            let stamp = Self.pasteStamp()
+            // Image data (screenshots arrive as TIFF/PNG; the store normalizes TIFF → PNG).
+            for (type, ext) in [(NSPasteboard.PasteboardType.png, "png"), (.tiff, "tiff"),
+                                (.pdf, "pdf")] {
+                if let data = pb.data(forType: type), !data.isEmpty {
+                    // A copied STRING also puts stray flavors up sometimes; only treat this
+                    // as an attachment paste when no plain text is present.
+                    if pb.string(forType: .string) != nil, type != .pdf {
+                        break
+                    }
+                    if let token = try? store.importData(data, suggestedName: "Pasted \(stamp).\(ext)") {
+                        insertTokens([token], at: index)
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+
+        private func importFiles(_ urls: [URL], at index: Int) {
+            guard let store = attachmentStore?() else { return }
+            var tokens: [AttachmentToken] = []
+            for url in urls {
+                if let t = try? store.importFile(url) {
+                    tokens.append(t)
+                }
+            }
+            if tokens.isEmpty {
+                NSSound.beep() // unreadable / over the size cap
+                return
+            }
+            insertTokens(tokens, at: index)
+        }
+
+        /// Insert as BLOCK tokens — each on its own line (consecutive lines form the preview
+        /// grid). Via insertText so the edit is undoable and flows through textDidChange.
+        private func insertTokens(_ tokens: [AttachmentToken], at index: Int) {
+            let ns = string as NSString
+            let idx = max(0, min(index, ns.length))
+            let atLineStart = idx == 0 || ns.character(at: idx - 1) == 0x0A
+            let atLineEnd = idx == ns.length || ns.character(at: idx) == 0x0A
+            var s = tokens.map(\.markdown).joined(separator: "\n")
+            if !atLineStart {
+                s = "\n" + s
+            }
+            if !atLineEnd {
+                s += "\n"
+            }
+            insertText(s, replacementRange: NSRange(location: idx, length: 0))
+        }
+
+        private static func pasteStamp() -> String {
+            let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second],
+                                                    from: Date())
+            return String(format: "%04d-%02d-%02d %02d.%02d.%02d",
+                          c.year ?? 0, c.month ?? 1, c.day ?? 1,
+                          c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
+        }
 
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
@@ -317,6 +419,7 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
         tv.completionVisible = { [weak co = context.coordinator] in co?.popup.active ?? false }
         tv.completionCancel = { [weak co = context.coordinator] in co?.popup.close() }
+        tv.attachmentStore = { [weak co = context.coordinator] in co?.parent.attachments }
         session?.end = { [weak co = context.coordinator] in co?.stampCreatedIfDirty() }
         tv.string = text
         context.coordinator.textView = tv
