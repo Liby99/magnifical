@@ -38,8 +38,10 @@ final class MultiSelectTests: XCTestCase {
         XCTAssertTrue(e.selectedIds.isEmpty); XCTAssertNil(e.selectedId)
     }
 
-    /// Batch band day-move is all-or-nothing: if one band is at the month edge, nothing moves.
-    func testBatchBandMoveAllOrNothing() {
+    /// Batch band day-move CROSSES month boundaries now (the spill representation): a band at
+    /// the month edge spills into the next month instead of freezing the batch. The
+    /// all-or-nothing bound is the YEAR's edges.
+    func testBatchBandMoveCrossesMonthEdge() {
         let e = CalendarEngine()
         let last = daysInMonth(e.year, 6)
         let a = e.createBand(year: e.year, month: 6, track: 0, startDay: 5, endDay: 6, title: "a", color: "blue")
@@ -53,10 +55,17 @@ final class MultiSelectTests: XCTestCase {
             color: "blue"
         )
         e.setSelection([a, b], primary: a)
-        e.batchMove(dx: 1, dy: 0) // b can't move right → whole batch is a no-op
-        XCTAssertEqual(e.band(a)?.startDay, 5)
-        e.batchMove(dx: -1, dy: 0) // both can move left
-        XCTAssertEqual(e.band(a)?.startDay, 4); XCTAssertEqual(e.band(b)?.startDay, last - 2)
+        e.batchMove(dx: 1, dy: 0) // b's end spills one day into August; both move
+        XCTAssertEqual(e.band(a)?.startDay, 6)
+        XCTAssertEqual(e.band(b)?.startDay, last)
+        XCTAssertEqual(e.band(b)?.endDay, last + 1) // spilled past July
+        e.batchMove(dx: -1, dy: 0) // and back
+        XCTAssertEqual(e.band(a)?.startDay, 5); XCTAssertEqual(e.band(b)?.endDay, last)
+        // The YEAR edge stays all-or-nothing: park b at Dec 30–31, then a +1 moves nothing.
+        e.updateBand(b) { $0.month = 11; $0.startDay = 30; $0.endDay = 31 }
+        e.batchMove(dx: 1, dy: 0)
+        XCTAssertEqual(e.band(a)?.startDay, 5, "a December year-edge band freezes the batch")
+        XCTAssertEqual(e.band(b)?.startDay, 30)
     }
 
     /// Batch timed day-move must not cross the month boundary (all-or-nothing).

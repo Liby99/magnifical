@@ -351,9 +351,10 @@ extension CalendarEngine {
     }
 
     private func bandContains(_ id: String, _ p: CGPoint, _ g: SceneInput) -> Bool {
-        guard let b = items.bands.first(where: { $0.id == id }),
-              let r = bandEventRect(b, g, anim: g.monthAnim) else { return false }
-        return CGRect(x: r.x, y: r.y, width: r.w, height: r.h).contains(p)
+        guard let b = items.bands.first(where: { $0.id == id }) else { return false }
+        // Every SEGMENT of a spilled band retains the hover, not just the anchor month's bar.
+        return bandEventRects(b, g, anim: g.monthAnim)
+            .contains { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h).contains(p) }
     }
 
     private func timedContains(_ id: String, _ p: CGPoint, _ g: SceneInput) -> Bool {

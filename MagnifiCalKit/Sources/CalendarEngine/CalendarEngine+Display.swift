@@ -66,6 +66,22 @@ extension CalendarEngine {
         return withPreview(items, { $0.id }, { $0.color = $1 })
     }
 
+    /// Bands VISIBLE in month `month`'s row: anchored there, plus any EARLIER month's band whose
+    /// spill (endDay past its own month — see the spilling-band helpers in +Editing) reaches
+    /// this month. Hit-testing, lane queries, and day-coverage must see continuations, not just
+    /// anchors — byMonth indexes by anchor month only.
+    public func bandsTouchingMonth(_ year: Int, _ month: Int) -> [BandEvent] {
+        var out = bandsInMonth(year, month)
+        var gap = 0 // days between month m's day 1 and `month`'s day 1
+        var m = month - 1
+        while m >= 0 {
+            gap += daysInMonth(year, m)
+            out += bandsInMonth(year, m).filter { $0.endDay > gap }
+            m -= 1
+        }
+        return out
+    }
+
     /// Provenance/kind markers for a box, from its SOURCE item's rich fields + the box's nature.
     /// Shared by the band and timed-event caches so both show the same glyphs.
     private func itemBadges(_ src: String, recurrent: Bool, promoted: Bool) -> EventBadges {

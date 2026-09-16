@@ -443,7 +443,9 @@ extension CalendarEngine {
         guard let sid = selectedId else { return }
         let id = sourceId(of: sid)
         if let b = band(id), dx != 0 {
-            let ne = max(b.startDay, min(daysInMonth(b.year, b.month), b.endDay + dx))
+            // The end may SPILL past the month (cross-month bands); clamp to the year's last day.
+            let maxEnd = Self.daysInYear(b.year) - Self.yearDay(b.year, b.month, 0)
+            let ne = max(b.startDay, min(maxEnd, b.endDay + dx))
             guard ne != b.endDay else { return }
             updateBand(id) { $0.endDay = ne }
         } else if let e = event(id), dy != 0 {
@@ -492,9 +494,13 @@ extension CalendarEngine {
         guard let sid = selectedId else { return }
         let id = sourceId(of: sid)
         if let b = band(id) {
-            let ns = b.startDay + dir, ne = b.endDay + dir
-            guard ns >= 1, ne <= daysInMonth(b.year, b.month) else { return } // stay within the month
-            updateBand(id) { $0.startDay = ns; $0.endDay = ne }
+            // Bands cross month boundaries now (spill representation) — clamp to the YEAR and
+            // re-anchor canonically when the start crosses into a neighbor month.
+            let startYD = Self.yearDay(b.year, b.month, b.startDay) + dir
+            let len = b.endDay - b.startDay
+            guard startYD >= 1, startYD + len <= Self.daysInYear(b.year) else { return }
+            let (m, day) = Self.monthDay(ofYearDay: startYD, b.year)
+            updateBand(id) { $0.month = m; $0.startDay = day; $0.endDay = day + len }
         } else if let e = event(id) {
             let (y, m, dd) = addDays(e.year, e.month, e.day, dir)
             update(id) { $0.year = y; $0.month = m; $0.day = dd }

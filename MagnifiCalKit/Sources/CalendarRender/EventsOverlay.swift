@@ -505,7 +505,8 @@ extension EventsOverlay {
     }
 
     private func bandItemsUncached() -> [Item2] {
-        var placed: [(ev: BandEvent, rect: CGRect, fade: Double, clipStart: Bool, clipEnd: Bool)] = []
+        var placed: [(ev: BandEvent, key: String, rect: CGRect, fade: Double,
+                      clipStart: Bool, clipEnd: Bool)] = []
         let weekish = input.z >= 1.5
         for b in bands {
             // Month/year layout positions a band by its month alone (frameFor(b.month)), so a
@@ -515,22 +516,29 @@ extension EventsOverlay {
             if !weekish && b.year != input.year {
                 continue
             }
-            guard let r = bandEventRect(b, input, anim: input.monthAnim) else { continue }
-            // Opacity comes from the FOCUS frame in week/day view (the adjacent month's own frame is
-            // off-screen there); a neighbor-month band shown in the spillover columns is dimmed.
-            let f = frameFor(weekish ? input.focus : b.month, input, anim: input.monthAnim)
-            let spill: Double = weekish ? Double(spillFactor(b.month, input, dim: Self.spilloverDim)) : 1
-            let rect = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
-            guard f.opacity > 0.004, onScreen(rect) else { continue } // skip invisible / off-screen months
-            placed.append((b, rect, Double(f.opacity) * spill, r.clipStart, r.clipEnd))
+            // One placed entry (and Item) PER SEGMENT: a month-spilling band draws a bar on every
+            // month row it touches. `key` uniquifies continuation segments (view identity + the
+            // per-bar gap/z maps below); everything selection/hover-related stays on ev.id.
+            for (si, r) in bandEventRects(b, input, anim: input.monthAnim).enumerated() {
+                // Opacity comes from the FOCUS frame in week/day view (the adjacent month's own
+                // frame is off-screen there); a neighbor-month band shown in the spillover columns
+                // is dimmed. Year/month: the segment's OWN row's frame.
+                let f = frameFor(weekish ? input.focus : r.rowMonth, input, anim: input.monthAnim)
+                let spill: Double = weekish ? Double(spillFactor(b.month, input, dim: Self.spilloverDim)) : 1
+                let rect = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
+                guard f.opacity > 0.004, onScreen(rect) else { continue } // invisible / off-screen rows
+                placed.append((b, si == 0 ? b.id : "\(b.id)#s\(si)", rect,
+                               Double(f.opacity) * spill, r.clipStart, r.clipEnd))
+            }
         }
-        // Fully-overlapping (same month/track/startDay/endDay): collapse to ONE (highest id),
-        // hide the rest, and flag the kept one with a warning sign.
+        // Fully-overlapping (same row/track/days): collapse to ONE (highest id), hide the rest,
+        // and flag the kept one with a warning sign. Keyed per RENDERED bar (rect), so a spilled
+        // band's own segments — same anchor days, different rows — never collapse each other.
         var hidden = Set<String>(), warn = Set<String>()
         var full: [String: [Int]] = [:]
         for (i, p) in placed.enumerated() {
             full[
-                "\(p.ev.month)-\(p.ev.track)-\(p.ev.startDay)-\(p.ev.endDay)",
+                "\(Int(p.rect.minX.rounded()))-\(Int(p.rect.minY.rounded()))-\(Int(p.rect.width.rounded()))",
                 default: []
             ].append(i)
         }
@@ -549,31 +557,36 @@ extension EventsOverlay {
         var clipBox = Set<String>() // non-longest same-start bars clip to their own box
         var byLane: [String: [Int]] = [:]
         // Week view shows both months on the same 4 lanes, so group by track alone — a spillover
-        // (neighbor-month) bar must "see" the focus bars on its lane so its title clips before them.
+        // (neighbor-month) bar must "see" the focus bars on its lane so its title clips before
+        // them. Year/month groups by the segment's ROW (a continuation bar competes with the
+        // bars of the month it lands on, not its anchor's). Gap/z/clip are per BAR (p.key).
         for (i, p) in placed.enumerated() where !hidden.contains(p.ev.id) {
-            byLane[weekish ? "\(p.ev.track)" : "\(p.ev.month)-\(p.ev.track)", default: []].append(i)
+            // Rendered Y encodes month row + track in one value at year/month zoom.
+            byLane[weekish ? "\(p.ev.track)" : "\(Int(p.rect.minY.rounded()))", default: []].append(i)
         }
         for (_, idxs) in byLane {
             for i in idxs {
                 // Compare by rendered X (startDay isn't comparable across months in the shared lane).
                 let later = idxs.filter { placed[$0].rect.minX > placed[i].rect.minX + 1 }
                 if let nearest = later.min(by: { placed[$0].rect.minX < placed[$1].rect.minX }) {
-                    gapBy[placed[i].ev.id] = placed[nearest].rect.minX - placed[i].rect.minX
+                    gapBy[placed[i].key] = placed[nearest].rect.minX - placed[i].rect.minX
                 }
             }
-            var byDay: [Int: [Int]] = [:]
+            // Same-start stacks by rendered X (comparable across months, unlike startDay).
+            var byStart: [Int: [Int]] = [:]
             for i in idxs {
-                byDay[placed[i].ev.startDay, default: []].append(i)
+                byStart[Int(placed[i].rect.minX.rounded()), default: []].append(i)
             }
-            for (start, stackIdxs) in byDay where stackIdxs.count >= 2 {
+            for (_, stackIdxs) in byStart where stackIdxs.count >= 2 {
                 func len(_ i: Int) -> Int {
                     placed[i].ev.endDay - placed[i].ev.startDay
                 }
                 let stack = stackIdxs.sorted { len($0) > len($1) } // longest first (bottom)
                 for si in stack.indices {
-                    zBy[placed[stack[si]].ev.id] = Double(10 + start + si * 2) // shorter → higher → on top
+                    // shorter → higher → on top
+                    zBy[placed[stack[si]].key] = Double(10 + placed[stack[si]].ev.startDay + si * 2)
                     if si > 0 {
-                        clipBox.insert(placed[stack[si]].ev.id)
+                        clipBox.insert(placed[stack[si]].key)
                     } // all but the longest
                 }
             }
@@ -587,20 +600,20 @@ extension EventsOverlay {
             if hidden.contains(id) {
                 return nil
             }
-            let a = activation(id)
-            let z: Double = a.isActive ? a.z : (zBy[id] ?? Double(10 + p.ev.startDay))
+            let a = activation(id) // selection/hover state is the BAND's — all segments dress alike
+            let z: Double = a.isActive ? a.z : (zBy[p.key] ?? Double(10 + p.ev.startDay))
             let isEditing = id == editingId
             let promoted = a == .plain && hoverRects.contains { $0.intersects(p.rect) }
             // Plain + not-editing at year/month zoom → the Canvas fast path draws it (flat payload);
             // active/editing/hover-overlapped bands stay views (glass, borders, spill scrim, editor).
             let fast: StickerDraw? = (canvasFastOn && a == .plain && !isEditing && !promoted)
-                ? .band(BandDraw(ev: p.ev, gap: gapBy[id], clipBox: clipBox.contains(id),
+                ? .band(BandDraw(ev: p.ev, gap: gapBy[p.key], clipBox: clipBox.contains(p.key),
                                  clipStart: p.clipStart, clipEnd: p.clipEnd,
                                  warn: warn.contains(id), badges: bandBadges[id] ?? []))
                 : nil
             let (gap, cb, warned, badges, plain) =
-                (gapBy[id], clipBox.contains(id), warn.contains(id), bandBadges[id] ?? [], plainEff)
-            return Item2(id: id, rect: p.rect, fade: p.fade, z: z, makeView: {
+                (gapBy[p.key], clipBox.contains(p.key), warn.contains(id), bandBadges[id] ?? [], plainEff)
+            return Item2(id: p.key, rect: p.rect, fade: p.fade, z: z, makeView: {
                 AnyView(BandSticker(ev: p.ev, activation: a, editing: isEditing,
                                     gap: gap, clipBox: cb,
                                     clipStart: p.clipStart, clipEnd: p.clipEnd,
@@ -804,7 +817,19 @@ extension EventsOverlay {
         var copy = self
         copy.input = g0
         copy.yearG0 = nil
-        let monthBands = bands.filter { $0.year == g0.year && $0.month == m }
+        // TOUCHING, not just anchored: a cross-month (spilling) band's continuation bar lands on
+        // THIS month's row while the band itself is anchored earlier — without it in the slice,
+        // the rest-year canvas never drew the continuation (it only appeared on hover, when the
+        // band leaves the fast path for the view stickers). Foreign segments the slice now also
+        // emits are clipped away by the canvas's own month-strip clip.
+        let monthBands = bands.filter { b in
+            guard b.year == g0.year, b.month <= m else { return false }
+            if b.month == m {
+                return true
+            }
+            let gap = (b.month ..< m).reduce(0) { $0 + daysInMonth(g0.year, $1) }
+            return b.endDay > gap // spills into month m
+        }
         let ids = Set(monthBands.map(\.id))
         copy.bands = monthBands
         copy.bandBadges = bandBadges.filter { ids.contains($0.key) }

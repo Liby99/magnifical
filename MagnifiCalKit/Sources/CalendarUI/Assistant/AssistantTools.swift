@@ -148,13 +148,17 @@ struct ListEventsTool: AssistantTool {
             }
             if kind == nil || kind == "band" {
                 for b in e.displayBands(for: y) {
-                    // Bands OVERLAP the window (not just start inside it).
-                    let s = key(b.year, b.month, b.startDay), t = key(b.year, b.month, b.endDay)
+                    // Bands OVERLAP the window (not just start inside it). The END goes through
+                    // bandEndYMD: a cross-month (spilling) band's raw endDay exceeds its month,
+                    // and keying it raw made "2026-01-33" compare BELOW Feb 1 — silently dropping
+                    // the band from exactly the window it spills into.
+                    let be = e.bandEndYMD(b)
+                    let s = key(b.year, b.month, b.startDay), t = key(be.year, be.month, be.day)
                     guard s <= toKey, t >= fromKey, matches(b.title, b.id) else { continue }
                     items.append((s, .obj([
                         "id": .str(b.id), "kind": .str("band"), "track": .num(laneOut(b.track)),
                         "start": .str(iso(b.year, b.month, b.startDay)),
-                        "end": .str(iso(b.year, b.month, b.endDay)),
+                        "end": .str(iso(be.year, be.month, be.day)),
                         "title": .str(b.title), "color": .str(b.color),
                     ])))
                 }
@@ -229,9 +233,10 @@ struct GetEventTool: AssistantTool {
             } // the event's own zone (times above are in the view zone)
         case .band:
             guard let b = e.band(id) else { break }
+            let be = e.bandEndYMD(b) // spill-aware end date
             out["title"] = .str(b.title); out["color"] = .str(b.color); out["track"] = .num(laneOut(b.track))
             out["start"] = .str(iso(b.year, b.month, b.startDay))
-            out["end"] = .str(iso(b.year, b.month, b.endDay))
+            out["end"] = .str(iso(be.year, be.month, be.day))
         case .deadline:
             guard let d0 = e.deadline(id) else { break }
             let d = e.displayDeadline(d0) // convert to the current view timezone

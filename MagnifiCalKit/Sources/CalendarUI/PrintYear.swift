@@ -175,7 +175,22 @@ struct PrintYearPage: View {
     private func monthStrip(_ m: Int, isFirst: Bool, isLast: Bool) -> some View {
         let dim = daysInMonth(year, m)
         let stripH = laneH * 4
-        let monthBands = bands.filter { $0.month == m }
+        // One entry per SEGMENT: a cross-month (spilling) band prints its slice on every month
+        // strip it touches, with LOCAL day numbers (the raw endDay would overrun the 31-day
+        // grid); continuation slices carry a uniquified id for ForEach.
+        let monthBands: [BandEvent] = bands.compactMap { b in
+            let dimB = daysInMonth(b.year, b.month)
+            if b.month == m {
+                var s = b; s.endDay = min(b.endDay, dimB); return s
+            }
+            guard b.month < m, b.endDay > dimB else { return nil }
+            let gap = (b.month ..< m).reduce(0) { $0 + daysInMonth(b.year, $1) }
+            guard b.endDay > gap else { return nil }
+            var s = b
+            s.id = b.id + "#p\(m)"; s.month = m; s.startDay = 1
+            s.endDay = min(b.endDay - gap, daysInMonth(b.year, m))
+            return s
+        }
         return HStack(alignment: .top, spacing: 0) {
             // The month name, rotated 90° like the on-screen gutter — its cell carries top/bottom borders
             // and a vertical rule separating it from the track names.

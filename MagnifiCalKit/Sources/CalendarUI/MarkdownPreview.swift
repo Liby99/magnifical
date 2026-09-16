@@ -68,7 +68,7 @@ struct MarkdownPreview: NSViewRepresentable {
 
         func rebuild(_ p: MarkdownPreview) {
             parent = p
-            guard let tv = textView else { return }
+            guard textView != nil else { return } // apply() below re-binds it after the render
             let key = p.text + "|" + NSColor(p.theme.text).description
             guard key != renderedKey else { return }
             renderedKey = key

@@ -1227,7 +1227,7 @@ struct EventDrawer: View {
                     displayedComponents: .date
                 ) }
                 Text("–").foregroundStyle(.secondary)
-                whenPart(.end, dateStr(endDay)) { DatePicker(
+                whenPart(.end, bandEndText) { DatePicker(
                     "",
                     selection: bandDayBinding(false),
                     in: monthRange,
@@ -1482,19 +1482,31 @@ struct EventDrawer: View {
                 })
     }
 
+    /// Bands cross month boundaries (spill representation): the pickers roam the whole YEAR,
+    /// dates convert to/from day-of-year, and a start moved into another month re-anchors the
+    /// band canonically while its absolute end stays put.
     private func bandDayBinding(_ isStart: Bool) -> Binding<Date> {
         Binding(
-            get: { makeDate(itemYear, month, isStart ? startDay : endDay) },
+            get: {
+                guard let b = engine.band(id) else { return makeDate(itemYear, month, 1) }
+                if isStart {
+                    return makeDate(b.year, b.month, b.startDay)
+                }
+                let e = engine.bandEndYMD(b)
+                return makeDate(e.year, e.month, e.day)
+            },
             set: { d in
-                let day = max(1, min(daysInMonth(itemYear, month), ymd(d).day))
-                engine.updateBand(id) {
+                let x = ymd(d)
+                engine.updateBand(id) { b in
+                    let picked = CalendarEngine.yearDay(b.year, x.m, x.day)
+                    let s = CalendarEngine.yearDay(b.year, b.month, b.startDay)
+                    let e = s + (b.endDay - b.startDay)
                     if isStart {
-                        $0.startDay = min(day, $0.endDay)
+                        let ns = min(picked, e)
+                        let (m, day) = CalendarEngine.monthDay(ofYearDay: ns, b.year)
+                        b.month = m; b.startDay = day; b.endDay = day + (e - ns)
                     } else {
-                        $0.endDay = max(
-                            day,
-                            $0.startDay
-                        )
+                        b.endDay = b.startDay + (max(picked, s) - s)
                     }
                 }
                 syncFromEngine()
@@ -1503,7 +1515,15 @@ struct EventDrawer: View {
     }
 
     private var monthRange: ClosedRange<Date> {
-        makeDate(itemYear, month, 1) ... makeDate(itemYear, month, daysInMonth(itemYear, month))
+        makeDate(itemYear, 0, 1) ... makeDate(itemYear, 11, 31) // band dates roam the whole year
+    }
+
+    /// The band end's label — the FULL date once it crosses out of the anchor month.
+    private var bandEndText: String {
+        guard let b = engine.band(id), b.endDay > daysInMonth(b.year, b.month) else {
+            return dateStr(endDay)
+        }
+        return dateStr(engine.bandEndYMD(b))
     }
 
     private func timeBinding(_ get: @escaping () -> CGFloat, _ set: @escaping (CGFloat) -> Void) -> Binding<Date> {

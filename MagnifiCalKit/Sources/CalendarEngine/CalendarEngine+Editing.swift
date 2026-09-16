@@ -339,6 +339,45 @@ extension CalendarEngine {
         return f.dayW > 0 ? Int((px - f.x0) / f.dayW) + 1 : 1
     }
 
+    // ── Cross-month (SPILLING) band math ────────────────────────────────────────────
+    // A band may spill past its anchor month's end (endDay > daysInMonth) — one entity
+    // crossing the boundary. Storage stays canonical (startDay ∈ 1..dim of `month`; endDay
+    // free to exceed), spill never leaves the band's year, and all cross-month arithmetic
+    // runs in 1-based DAY-OF-YEAR space via these helpers.
+
+    /// Day-of-year index of (month, day) — `day` may itself overflow its month (a spilled end).
+    public static func yearDay(_ year: Int, _ month: Int, _ day: Int) -> Int {
+        (0 ..< month).reduce(day) { $0 + daysInMonth(year, $1) }
+    }
+
+    public static func daysInYear(_ year: Int) -> Int {
+        (0 ..< 12).reduce(0) { $0 + daysInMonth(year, $1) }
+    }
+
+    /// Inverse of yearDay, clamped into the year: the (month, day-in-month) of day-of-year `n`.
+    public static func monthDay(ofYearDay n: Int, _ year: Int) -> (month: Int, day: Int) {
+        var d = max(1, n), m = 0
+        while m < 11, d > daysInMonth(year, m) {
+            d -= daysInMonth(year, m); m += 1
+        }
+        return (m, min(d, daysInMonth(year, m)))
+    }
+
+    /// The real calendar END date of a possibly-spilling band (endDay normalized through the
+    /// month boundary) — every date-formatting consumer must use this, never raw endDay.
+    public func bandEndYMD(_ b: BandEvent) -> YMD {
+        b.endDay <= daysInMonth(b.year, b.month)
+            ? YMD(b.year, b.month, b.endDay)
+            : Self.addDaysYMD(YMD(b.year, b.month, b.startDay), b.endDay - b.startDay)
+    }
+
+    /// Spill-aware coverage: does `b` include calendar day (month, day) of its own year?
+    func bandCovers(_ b: BandEvent, month: Int, day: Int) -> Bool {
+        let yd = Self.yearDay(b.year, month, day)
+        let s = Self.yearDay(b.year, b.month, b.startDay)
+        return yd >= s && yd <= s + (b.endDay - b.startDay)
+    }
+
     /// Months whose band lanes could contain point `p` — a conservative superset that prunes the band
     /// hit-test to a handful of months instead of the whole year. Week/day view (z≥1.5) positions bands
     /// relative to the focus window, so the focus month and its two neighbors can spill in. Year/month
@@ -365,11 +404,15 @@ extension CalendarEngine {
             b.id == selectedId ? 2 : (b.id == hoveredEventId ? 1 : 0)
         }
         var best: (b: BandEvent, r: BandRect, rect: CGRect)?
-        // Only the candidate months' bands can be under the cursor — skip the rest of the year's ghosts.
-        for b in candidateBandMonths(p, g).flatMap({ bandsInMonth(year, $0) }) { // recurrence + promoted ghosts too
-            guard let r = bandEventRect(b, g, anim: g.monthAnim) else { continue }
+        // Only the candidate months' bands can be under the cursor — skip the rest of the year's
+        // ghosts. bandsTouchingMonth (not bandsInMonth): a spilled band's continuation segment
+        // lies on a LATER month's row than its anchor. Every segment is hit-testable; the
+        // segment's own clip flags gate the resize edges below (only the true start/end resize).
+        for b in candidateBandMonths(p, g).flatMap({ bandsTouchingMonth(year, $0) }) {
+            guard let r = bandEventRects(b, g, anim: g.monthAnim)
+                .first(where: { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h).contains(p) })
+            else { continue }
             let rect = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
-            guard rect.contains(p) else { continue }
             guard let cur = best else { best = (b, r, rect); continue }
             let tb = tier(b), tc = tier(cur.b)
             let onTop: Bool
@@ -401,12 +444,18 @@ extension CalendarEngine {
               let slot = bandSlotAtPoint(p.x, p.y, g) else { return } // follow the lane under the cursor
         beginTxn()
         let len = orig.endDay - orig.startDay
-        // Keep the grab offset (day within the band where the drag started), so a band can be
-        // dragged across months/tracks in year view — not just within its own month.
-        let grab = (bandSlotAtPoint(d.startPoint.x, d.startPoint.y, g)?.day ?? orig.startDay) - orig.startDay
-        let start = max(1, min(daysInMonth(year, slot.month) - len, slot.day - grab))
+        // All in DAY-OF-YEAR space, keeping the grab offset (the day within the band where the
+        // drag started): the band slides CONTINUOUSLY across month boundaries — straddling
+        // positions (spill) included — instead of snapping whole into the row under the cursor.
+        // Clamped inside the year (bands are year-scoped).
+        let startYD = Self.yearDay(orig.year, orig.month, orig.startDay)
+        let grabYD = bandSlotAtPoint(d.startPoint.x, d.startPoint.y, g)
+            .map { Self.yearDay(orig.year, $0.month, $0.day) } ?? startYD
+        let slotYD = Self.yearDay(orig.year, slot.month, slot.day)
+        let newStartYD = max(1, min(Self.daysInYear(orig.year) - len, slotYD - (grabYD - startYD)))
+        let (m, day) = Self.monthDay(ofYearDay: newStartYD, orig.year)
         var b = items.bands[idx]
-        b.month = slot.month; b.track = slot.track; b.startDay = start; b.endDay = start + len
+        b.month = m; b.track = slot.track; b.startDay = day; b.endDay = day + len
         items.bands[idx] = b
     }
 
@@ -424,12 +473,29 @@ extension CalendarEngine {
     func applyBandResize(_ d: Drag, _ p: CGPoint, _ g: SceneInput, left: Bool) {
         guard let orig = d.origBand, let idx = items.bands.firstIndex(where: { $0.id == d.eventId }) else { return }
         beginTxn()
-        let day = max(1, min(daysInMonth(year, orig.month), bandDay(p.x, orig.month, g)))
+        // Pointer → day-of-year: the lane slot under the cursor when there is one (year view —
+        // the cursor may be on ANOTHER month's row, crossing the boundary), else the unclamped
+        // column against the band's own month (the week strip is continuous, and a year-view
+        // overshoot past a row's last day spills the same way). Everything derives from the
+        // drag-start band + the pointer, so each apply is idempotent.
+        let pointerYD: Int = {
+            if let slot = bandSlotAtPoint(p.x, p.y, g) {
+                return Self.yearDay(orig.year, slot.month, slot.day)
+            }
+            return Self.yearDay(orig.year, orig.month, bandDay(p.x, orig.month, g))
+        }()
+        let yd = max(1, min(Self.daysInYear(orig.year), pointerYD))
+        let startYD = Self.yearDay(orig.year, orig.month, orig.startDay)
+        let endYD = startYD + (orig.endDay - orig.startDay)
         var b = items.bands[idx]
         if left {
-            b.startDay = min(b.endDay, day)
+            // The left edge may cross into an earlier (or later) month: re-anchor canonically.
+            let ns = min(endYD, yd)
+            let (m, day) = Self.monthDay(ofYearDay: ns, orig.year)
+            b.month = m; b.startDay = day; b.endDay = day + (endYD - ns)
         } else {
-            b.endDay = max(b.startDay, day)
+            b.month = orig.month; b.startDay = orig.startDay
+            b.endDay = orig.startDay + (max(startYD, yd) - startYD) // may spill past the month
         }
         items.bands[idx] = b
     }
@@ -454,9 +520,21 @@ extension CalendarEngine {
         }
         guard let id = d.eventId, let idx = items.bands.firstIndex(where: { $0.id == id }), let mo = d.bandMonth,
               let a = d.bandAnchorDay else { return }
-        let cur = max(1, min(daysInMonth(year, mo), bandDay(p.x, mo, g)))
+        // Day-of-year, like move/resize: the create-drag crosses month boundaries — anchor on
+        // Jul 15 and drag onto August's row (any lane; the TRACK stays the anchor's) and the
+        // band spans Jul 15 → that August day, spilling. Backwards drags re-anchor canonically.
+        let anchorYD = Self.yearDay(year, mo, a)
+        let pointerYD: Int = {
+            if let slot = bandSlotAtPoint(p.x, p.y, g) {
+                return Self.yearDay(year, slot.month, slot.day)
+            }
+            return Self.yearDay(year, mo, bandDay(p.x, mo, g)) // row overshoot / gutter fallback
+        }()
+        let cur = max(1, min(Self.daysInYear(year), pointerYD))
+        let s = min(anchorYD, cur), e = max(anchorYD, cur)
+        let (m, day) = Self.monthDay(ofYearDay: s, year)
         var b = items.bands[idx]
-        b.startDay = min(a, cur); b.endDay = max(a, cur)
+        b.month = m; b.startDay = day; b.endDay = day + (e - s)
         items.bands[idx] = b
     }
 
@@ -734,7 +812,9 @@ extension CalendarEngine {
             return id
         case "band":
             guard let t = bandPasteTarget() else { return nil }
-            let end = min(daysInMonth(t.year, t.month), t.startDay + max(0, clip.spanDays))
+            // Keep the copied SPAN across month boundaries (spill); clamp at the year's end.
+            let end = min(Self.daysInYear(t.year) - Self.yearDay(t.year, t.month, 0),
+                          t.startDay + max(0, clip.spanDays))
             let delta = clip.move
                 .map { dayDiff($0.baseYear, $0.baseMonth, $0.baseDay, t.year, t.month, t.startDay) } ?? 0
             beginTxn()

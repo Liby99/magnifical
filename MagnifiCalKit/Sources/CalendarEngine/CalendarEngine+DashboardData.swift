@@ -358,7 +358,8 @@ extension CalendarEngine {
             ?? deadline(sid).map { ($0.year, $0.month, $0.day) }
         guard let (y, m, d) = ymd else { return 0 }
         var used = Set<Int>()
-        for b in bandsInMonth(y, m) where b.startDay <= d && b.endDay >= d {
+        // Touching + covers: a band spilling in from an earlier month still occupies its lane.
+        for b in bandsTouchingMonth(y, m) where bandCovers(b, month: m, day: d) {
             used.insert(b.track)
         }
         return (0 ..< TRACKS.count).first { !used.contains($0) } ?? 0

@@ -37,10 +37,11 @@ extension CalendarEngine {
         }
         for b in items.bands {
             let rf = items.richById[b.id]
+            let end = bandEndYMD(b) // spill-aware: raw endDay may exceed the month ("2026-01-33")
             out.append(TodoSource(id: b.id, kind: "band", title: b.title, color: b.color,
                                   tags: rf?.tags ?? [],
                                   start: wall(b.year, b.month, b.startDay),
-                                  end: wall(b.year, b.month, b.endDay),
+                                  end: wall(end.year, end.month, end.day),
                                   notes: rf?.notes, occurrenceNotes: rf?.occurrenceNotes))
         }
         for d0 in items.deadlines {

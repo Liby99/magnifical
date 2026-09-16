@@ -33,6 +33,9 @@ public struct BandEvent: Sendable, Identifiable, Equatable, Codable {
 public struct BandRect: Sendable {
     public var x: CGFloat; public var y: CGFloat; public var w: CGFloat; public var h: CGFloat
     public var clipStart: Bool; public var clipEnd: Bool
+    /// The month whose ROW this rect sits on — the anchor month for a plain band, the
+    /// continuation month for a spilled band's later segments (weekish: the focus month).
+    public var rowMonth: Int = 0
 }
 
 private func bandOnScreen(_ bandY: CGFloat, _ trackH: CGFloat, _ vp: Viewport) -> Bool {
@@ -43,8 +46,13 @@ public func bandEventRect(_ ev: BandEvent, _ g: SceneInput, anim: PageAnim? = ni
     // Week/day view shows ONE focus window with spillover days from the neighbor months. Position all
     // bands relative to the focus week frame, mapping the band's days to focus-relative indices — so an
     // adjacent-month band lands in the spillover columns (same 4-lane track index). Year/month: own frame.
+    // A month-SPILLING band (endDay > daysInMonth — it crosses into the next month(s)) renders here as
+    // its ANCHOR-month segment only, clipped square at the month edge; bandEventRects returns the
+    // continuation segments on the following month rows. The weekish path needs no clamp: its day strip
+    // is continuous and relDomOf's spillover indexing already places cross-month days.
     let f: Frame
     let startIdx: Int, endIdx: Int
+    var spillsOn = false
     if g.z >= 1.5 {
         // relDomOf gates adjacency (incl. across the Dec↔Jan year boundary); an off-year, non-neighbor
         // band resolves to nil and doesn't render — so the year check is folded into this mapping.
@@ -53,7 +61,9 @@ public func bandEventRect(_ ev: BandEvent, _ g: SceneInput, anim: PageAnim? = ni
         f = frameFor(g.focus, g, anim: anim); startIdx = rs; endIdx = re
     } else {
         guard ev.year == g.year else { return nil } // month/year view is year-scoped, positioned by month
-        f = frameFor(ev.month, g, anim: anim); startIdx = ev.startDay; endIdx = ev.endDay
+        let dim = daysInMonth(ev.year, ev.month)
+        f = frameFor(ev.month, g, anim: anim); startIdx = ev.startDay; endIdx = min(ev.endDay, dim)
+        spillsOn = ev.endDay > dim
     }
     if f.opacity < 0.02 || !bandOnScreen(f.bandY, f.trackH, g.vp) {
         return nil
@@ -73,8 +83,40 @@ public func bandEventRect(_ ev: BandEvent, _ g: SceneInput, anim: PageAnim? = ni
         w: max(2, right - left),
         h: max(3, f.trackH - 6),
         clipStart: leftRaw < Layout.labelW - 0.5,
-        clipEnd: rightRaw > g.vp.w + 0.5
+        clipEnd: rightRaw > g.vp.w + 0.5 || spillsOn, // spill continues on the next month row
+        rowMonth: g.z >= 1.5 ? g.focus : ev.month
     )
+}
+
+/// EVERY screen segment of a band. Week/day: the one continuous-strip rect (bandEventRect
+/// handles spill there natively). Year/month: one rect per month ROW the band touches — a
+/// month-spilling band draws its anchor segment plus a continuation bar on each following
+/// month's row, seamed with square corners (clipEnd on the leading piece, clipStart on the
+/// continuations — the "continues off-screen" language the stickers already speak).
+public func bandEventRects(_ ev: BandEvent, _ g: SceneInput, anim: PageAnim? = nil) -> [BandRect] {
+    let dim = daysInMonth(ev.year, ev.month)
+    if g.z >= 1.5 || ev.endDay <= dim {
+        return bandEventRect(ev, g, anim: anim).map { [$0] } ?? []
+    }
+    guard ev.year == g.year else { return [] }
+    var out: [BandRect] = []
+    var m = ev.month, start = ev.startDay, remaining = ev.endDay
+    while m <= 11, remaining >= start {
+        let dimM = daysInMonth(ev.year, m)
+        var seg = ev
+        seg.month = m; seg.startDay = start; seg.endDay = min(remaining, dimM)
+        if var r = bandEventRect(seg, g, anim: anim) {
+            if m > ev.month {
+                r.clipStart = true // continuation: square left corners, no accent bar
+            }
+            if remaining > dimM {
+                r.clipEnd = true // more follows on the next row
+            }
+            out.append(r)
+        }
+        start = 1; remaining -= dimM; m += 1
+    }
+    return out
 }
 
 /// Which month band / track lane / day is under the cursor (for create + move, later).

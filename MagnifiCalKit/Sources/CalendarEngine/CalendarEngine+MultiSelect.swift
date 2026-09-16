@@ -42,10 +42,11 @@ extension CalendarEngine {
     /// query. Mirrors the point hit-tests with `.intersects`, using the same per-day packing the overlay draws.
     public func itemsIntersecting(_ rect: CGRect, _ g: SceneInput) -> Set<String> {
         var ids: Set<String> = []
-        // Bands (every zoom level).
+        // Bands (every zoom level). Segments: a spilled band is marquee-selectable on every
+        // month row it touches.
         for b in viewBands() {
-            if let r = bandEventRect(b, g, anim: g.monthAnim),
-               rect.intersects(CGRect(x: r.x, y: r.y, width: r.w, height: r.h)) {
+            if bandEventRects(b, g, anim: g.monthAnim)
+                .contains(where: { rect.intersects(CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h)) }) {
                 ids.insert(b.id)
             }
         }

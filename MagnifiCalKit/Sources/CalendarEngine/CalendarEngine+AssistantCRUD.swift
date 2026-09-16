@@ -346,7 +346,7 @@ extension CalendarEngine {
         for e in displayEvents(for: year) where e.month == month && e.day == day {
             out.append("timed: \(e.title) \(String(format: "%.0f", e.startHour))–\(String(format: "%.0f", e.endHour))h")
         }
-        for b in displayBands(for: year) where b.month == month && day >= b.startDay && day <= b.endDay {
+        for b in displayBands(for: year) where bandCovers(b, month: month, day: day) {
             out.append("band: \(b.title) (lane \(b.track + 1))") // 1-based for the AI/auditor
         }
         for d in displayDeadlines(for: year) where d.month == month && d.day == day {

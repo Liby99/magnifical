@@ -49,16 +49,21 @@ extension CalendarEngine {
         scrollToSelected()
     }
 
-    private func batchBandDay(_ set: Set<String>, _ dx: Int) { // stay within the month, all-or-nothing
+    private func batchBandDay(_ set: Set<String>, _ dx: Int) { // stay within the YEAR, all-or-nothing
         let bands = items.bands.filter { set.contains($0.id) }
-        guard !bands.isEmpty, bands.allSatisfy({ $0.startDay + dx >= 1 && $0.endDay + dx <= daysInMonth(
-            $0.year,
-            $0.month
-        ) }) else { return }
+        // Bands cross month boundaries (spill) — the all-or-nothing bound is the year's edges.
+        guard !bands.isEmpty, bands.allSatisfy({ b in
+            let s = Self.yearDay(b.year, b.month, b.startDay) + dx
+            return s >= 1 && s + (b.endDay - b.startDay) <= Self.daysInYear(b.year)
+        }) else { return }
         beginTxn()
         for i in items.bands.indices
             where set.contains(items.bands[i].id) {
-            items.bands[i].startDay += dx; items.bands[i].endDay += dx
+            var b = items.bands[i]
+            let len = b.endDay - b.startDay
+            let (m, day) = Self.monthDay(ofYearDay: Self.yearDay(b.year, b.month, b.startDay) + dx, b.year)
+            b.month = m; b.startDay = day; b.endDay = day + len
+            items.bands[i] = b
         }
         commitTxn()
     }
@@ -136,8 +141,8 @@ extension CalendarEngine {
         let set = Set(srcs)
         if allBands(srcs), dx != 0 {
             let bands = items.bands.filter { set.contains($0.id) }
-            func ne(_ b: BandEvent) -> Int {
-                max(b.startDay, min(daysInMonth(b.year, b.month), b.endDay + dx))
+            func ne(_ b: BandEvent) -> Int { // end may spill past the month; bound = year's last day
+                max(b.startDay, min(Self.daysInYear(b.year) - Self.yearDay(b.year, b.month, 0), b.endDay + dx))
             }
             guard !bands.isEmpty, bands.allSatisfy({ ne($0) != $0.endDay }) else { return }
             beginTxn()

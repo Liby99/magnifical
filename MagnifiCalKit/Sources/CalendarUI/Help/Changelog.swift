@@ -46,16 +46,55 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.4.1", date: "September 16, 2026",
+            headline: "Band events cross month boundaries.",
+            changes: [
+                .init(
+                    .added,
+                    "**Bands cross month boundaries**: drag a band in the year view and it slides continuously across month rows (straddling positions like Jul 30 – Aug 2 included), resize an edge into the neighboring month, or create one by dragging across the boundary — the band draws a bar on every month row it touches, joined with square seams."
+                ),
+                .init(
+                    .added,
+                    "The drawer's band **date pickers roam the whole year** (pick an end in the next month, or re-anchor the start), keyboard nudges and batch moves cross the boundary too, and to-do due dates, exports, backups, and the assistant all report the true end date."
+                ),
+                .init(
+                    .fixed,
+                    "The app's old internal codename no longer appears in any user-visible string — import markers, backup manifests, and permission prompts all say MagnifiCal."
+                ),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.4.0", date: "September 11, 2026",
             headline: "TODO rows you can select and edit in place, and edge tags that work harder.",
             changes: [
-                .init(.added, "**TODO rows are selectable**: click selects (accent wash + bar), shift+click multi-selects, double-click jumps to the source. **Enter** edits the row inline in the note editor's exact face; **⇧Enter** adds a sub-item, **⌘Enter** a sibling; **Delete** confirms (naming the line's home) then removes — everything one ⌘Z step."),
-                .init(.added, "A **dashboard toggle button** in the toolbar, left of Today — ⌘B's button form (the right-sidebar glyph, accent-tinted while pinned); shown at month/week zoom."),
-                .init(.improved, "The edge **\"now\" tag and deadline mini pills are click targets**: a click glides the timeline to center that time, with a hover highlight and the hand cursor — and the big label morphs **continuously** into its mini tag as it scrolls off, never jumping sides."),
-                .init(.improved, "**Day view pinch**: pinching out over the timeline always stretches the hours (there's nothing deeper to zoom into); pinching in still zooms out to week."),
-                .init(.improved, "**Time ticks densify** as you stretch the timeline: past the midpoint a label every hour, near the top half-hour ticks too."),
-                .init(.fixed, "**Deadline labels frost like events**: hovering one now shows real Liquid Glass; where a deadline overlaps an event, the deadline takes the hover/click; and labels render above the gutter's time ticks."),
-                .init(.fixed, "**PROJ quick-add** no longer shuffles the project ordering under your cursor — the new row simply appears on top of its project."),
+                .init(
+                    .added,
+                    "**TODO rows are selectable**: click selects (accent wash + bar), shift+click multi-selects, double-click jumps to the source. **Enter** edits the row inline in the note editor's exact face; **⇧Enter** adds a sub-item, **⌘Enter** a sibling; **Delete** confirms (naming the line's home) then removes — everything one ⌘Z step."
+                ),
+                .init(
+                    .added,
+                    "A **dashboard toggle button** in the toolbar, left of Today — ⌘B's button form (the right-sidebar glyph, accent-tinted while pinned); shown at month/week zoom."
+                ),
+                .init(
+                    .improved,
+                    "The edge **\"now\" tag and deadline mini pills are click targets**: a click glides the timeline to center that time, with a hover highlight and the hand cursor — and the big label morphs **continuously** into its mini tag as it scrolls off, never jumping sides."
+                ),
+                .init(
+                    .improved,
+                    "**Day view pinch**: pinching out over the timeline always stretches the hours (there's nothing deeper to zoom into); pinching in still zooms out to week."
+                ),
+                .init(
+                    .improved,
+                    "**Time ticks densify** as you stretch the timeline: past the midpoint a label every hour, near the top half-hour ticks too."
+                ),
+                .init(
+                    .fixed,
+                    "**Deadline labels frost like events**: hovering one now shows real Liquid Glass; where a deadline overlaps an event, the deadline takes the hover/click; and labels render above the gutter's time ticks."
+                ),
+                .init(
+                    .fixed,
+                    "**PROJ quick-add** no longer shuffles the project ordering under your cursor — the new row simply appears on top of its project."
+                ),
             ]
         ),
         ChangelogRelease(

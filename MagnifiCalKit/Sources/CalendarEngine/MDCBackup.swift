@@ -142,10 +142,13 @@ public enum MDCBackup {
             switch kind {
             case "band":
                 let end = dateFrom(row["end"]) ?? start
-                let (_, _, ed) = utcYMD(end)
+                // Day COUNT, not the end's day-of-month: a cross-month (spilling) band exports a
+                // real ISO end date in the next month — reading back just its day component
+                // silently truncated the span (Jan 30–Feb 2 became Jan 30).
+                let span = utcCalendar.dateComponents([.day], from: start, to: end).day ?? 0
                 let track = (row["track"] as? Int) ?? 0
                 bands.append(BandEvent(id: id, year: sy, month: sm, track: max(0, min(3, track)),
-                                       startDay: sd, endDay: max(sd, ed), title: title, color: color))
+                                       startDay: sd, endDay: sd + max(0, span), title: title, color: color))
             case "deadline":
                 deadlines.append(Deadline(id: id, year: sy, month: sm, day: sd, hour: hourInto(start, dayOf: start),
                                           title: title, color: color, originTz: row["originTz"] as? String,
