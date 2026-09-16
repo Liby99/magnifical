@@ -422,22 +422,30 @@ struct NativeNoteEditor: NSViewRepresentable {
             return u.isEmpty ? nil : u
         }
 
+        // NO super calls in these four: NSDraggingDestination's methods are OPTIONAL and a
+        // plain NSScrollView implements none of them — super.draggingEnded(_:) raised
+        // "unrecognized selector" mid-drag-completion and killed the whole drop. (NSTextView
+        // DOES implement them, which is why the preview's overrides may call super.)
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            if store?() != nil, urls(sender.draggingPasteboard) != nil {
-                overlay.isHidden = false
-                return .copy
-            }
-            return super.draggingEntered(sender)
+            guard store?() != nil, urls(sender.draggingPasteboard) != nil else { return [] }
+            overlay.isHidden = false
+            return .copy
+        }
+
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            overlay.isHidden ? [] : .copy
         }
 
         override func draggingExited(_ sender: NSDraggingInfo?) {
             overlay.isHidden = true
-            super.draggingExited(sender)
         }
 
         override func draggingEnded(_ sender: NSDraggingInfo) {
             overlay.isHidden = true
-            super.draggingEnded(sender)
+        }
+
+        override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            !overlay.isHidden
         }
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
