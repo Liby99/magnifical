@@ -48,6 +48,7 @@ struct MarkdownPreview: NSViewRepresentable {
             .backgroundColor: NSColor(Theme.accent).withAlphaComponent(0.24),
         ]
         tv.delegate = context.coordinator
+        tv.registerForDraggedTypes([.fileURL]) // see updateDragTypeRegistration — non-editable
         context.coordinator.textView = tv
         let scroll = NSScrollView()
         scroll.documentView = tv
@@ -551,6 +552,14 @@ final class PreviewTextView: NSTextView {
         didSet { if dropTargetActive != oldValue {
             needsDisplay = true
         } }
+    }
+
+    /// NSTextView UNREGISTERS all drag types while non-editable (its updateDragTypeRegistration
+    /// contract) — so a read-only preview never even hears draggingEntered. Re-pin the file
+    /// registration every time AppKit re-evaluates it, or the drop target silently dies.
+    override func updateDragTypeRegistration() {
+        super.updateDragTypeRegistration()
+        registerForDraggedTypes([.fileURL])
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
