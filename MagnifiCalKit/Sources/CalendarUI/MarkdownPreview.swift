@@ -350,6 +350,7 @@ final class PreviewTextView: NSTextView {
         }
         super.draw(dirtyRect)
         drawAttachmentRing() // the selected card's accent ring, above everything
+        drawDropTarget() // the drag-over mask + dashed ring + "＋ Add Attachment"
     }
 
     /// Rounded on the RIGHT corners only; the left edge (under the accent bar) stays square.
@@ -544,15 +545,42 @@ final class PreviewTextView: NSTextView {
     }
 
     // ── Drop on the preview: import + append (the preview has no caret) ─────────────
+    /// A valid file drag is over the pane → the dimmed mask + dashed ring + "＋ Add
+    /// Attachment" (the .ics import overlay's language, scoped to the preview's viewport).
+    private var dropTargetActive = false {
+        didSet { if dropTargetActive != oldValue {
+            needsDisplay = true
+        } }
+    }
+
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         if onAppendMarkdown != nil, attachmentStore?() != nil,
            fileURLsOnPasteboard(sender.draggingPasteboard) != nil {
+            dropTargetActive = true
             return .copy
         }
         return super.draggingEntered(sender)
     }
 
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if dropTargetActive {
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        dropTargetActive = false
+        super.draggingExited(sender)
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        dropTargetActive = false
+        super.draggingEnded(sender)
+    }
+
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        dropTargetActive = false
         if let append = onAppendMarkdown, let store = attachmentStore?(),
            let urls = fileURLsOnPasteboard(sender.draggingPasteboard) {
             let tokens = urls.compactMap { try? store.importFile($0) }
@@ -561,6 +589,41 @@ final class PreviewTextView: NSTextView {
             return true
         }
         return super.performDragOperation(sender)
+    }
+
+    /// The drop overlay, drawn over the VISIBLE viewport (the document may be far taller).
+    func drawDropTarget() {
+        guard dropTargetActive else { return }
+        let vis = visibleRect
+        // Dimmed mask (the material wash, in draw-pass form: the pane's ground at ~72%).
+        (NSColor(Theme.accent).withAlphaComponent(0.04)).setFill()
+        vis.fill()
+        NSColor.windowBackgroundColor.withAlphaComponent(0.72).setFill()
+        vis.fill()
+        // Dashed inner ring, the .ics overlay's stroke.
+        let ringRect = vis.insetBy(dx: 12, dy: 12)
+        let ring = NSBezierPath(roundedRect: ringRect, xRadius: 14, yRadius: 14)
+        ring.setLineDash([12, 8], count: 2, phase: 0)
+        ring.lineWidth = 3
+        NSColor(Theme.accent).withAlphaComponent(0.85).setStroke()
+        ring.stroke()
+        // Centered ＋ over "Add Attachment".
+        let accent = NSColor(Theme.accent)
+        let plusAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 40, weight: .medium), .foregroundColor: accent,
+        ]
+        let labelAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 17, weight: .semibold), .foregroundColor: accent,
+        ]
+        let plus = "+" as NSString
+        let label = "Add Attachment" as NSString
+        let plusSize = plus.size(withAttributes: plusAttrs)
+        let labelSize = label.size(withAttributes: labelAttrs)
+        let totalH = plusSize.height + 6 + labelSize.height
+        let top = vis.midY - totalH / 2
+        plus.draw(at: NSPoint(x: vis.midX - plusSize.width / 2, y: top), withAttributes: plusAttrs)
+        label.draw(at: NSPoint(x: vis.midX - labelSize.width / 2, y: top + plusSize.height + 6),
+                   withAttributes: labelAttrs)
     }
 
     private func fileURLsOnPasteboard(_ pb: NSPasteboard) -> [URL]? {
