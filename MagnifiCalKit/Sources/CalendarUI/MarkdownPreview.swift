@@ -563,8 +563,9 @@ final class PreviewTextView: NSTextView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if onAppendMarkdown != nil, attachmentStore?() != nil,
-           fileURLsOnPasteboard(sender.draggingPasteboard) != nil {
+        let urls = fileURLsOnPasteboard(sender.draggingPasteboard)
+        attachLog.log("preview entered: append=\(self.onAppendMarkdown != nil) store=\(self.attachmentStore?() != nil) urls=\(urls?.count ?? 0)")
+        if onAppendMarkdown != nil, attachmentStore?() != nil, urls != nil {
             dropTargetActive = true
             return .copy
         }
@@ -576,6 +577,16 @@ final class PreviewTextView: NSTextView {
             return .copy
         }
         return super.draggingUpdated(sender)
+    }
+
+    /// WITHOUT this, the drop dies silently: AppKit runs prepare BEFORE perform, and
+    /// NSTextView's own prepareForDragOperation refuses drops on NON-EDITABLE views — the
+    /// overlay showed (our draggingEntered ran) but performDragOperation was never called.
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if dropTargetActive {
+            return true
+        }
+        return super.prepareForDragOperation(sender)
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
@@ -592,11 +603,18 @@ final class PreviewTextView: NSTextView {
         dropTargetActive = false
         if let append = onAppendMarkdown, let store = attachmentStore?(),
            let urls = fileURLsOnPasteboard(sender.draggingPasteboard) {
-            let tokens = urls.compactMap { try? store.importFile($0) }
+            var tokens: [AttachmentToken] = []
+            for url in urls {
+                do { tokens.append(try store.importFile(url)) } catch {
+                    attachLog.error("preview import FAILED \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            attachLog.log("preview perform: urls=\(urls.count) imported=\(tokens.count)")
             guard !tokens.isEmpty else { NSSound.beep(); return true }
             append(tokens.map(\.markdown).joined(separator: "\n"))
             return true
         }
+        attachLog.log("preview perform FELL THROUGH to super (closures or urls missing)")
         return super.performDragOperation(sender)
     }
 

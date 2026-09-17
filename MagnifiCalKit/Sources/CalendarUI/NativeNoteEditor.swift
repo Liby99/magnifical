@@ -93,18 +93,40 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+            let urls = fileURLs(on: sender.draggingPasteboard)
+            attachLog.log("editor entered: store=\(self.attachmentStore?() != nil) urls=\(urls?.count ?? 0)")
+            if attachmentStore?() != nil, urls != nil {
                 return .copy
             }
             return super.draggingEntered(sender)
         }
 
+        /// Keep the WHOLE drop sequence on our path for file drags: NSTextView's own
+        /// draggingUpdated/prepare recompute from ITS readable types and can refuse or
+        /// downgrade what our draggingEntered accepted (prepare refusing is why drops
+        /// "accepted" with a green + landed nothing).
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+                return .copy
+            }
+            return super.draggingUpdated(sender)
+        }
+
+        override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+                return true
+            }
+            return super.prepareForDragOperation(sender)
+        }
+
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
             if attachmentStore?() != nil, let urls = fileURLs(on: sender.draggingPasteboard) {
+                attachLog.log("editor perform: urls=\(urls.count)")
                 let p = convert(sender.draggingLocation, from: nil)
                 importFiles(urls, at: characterIndexForInsertion(at: p))
                 return true
             }
+            attachLog.log("editor perform FELL THROUGH to super")
             return super.performDragOperation(sender)
         }
 
@@ -144,10 +166,11 @@ struct NativeNoteEditor: NSViewRepresentable {
             guard let store = attachmentStore?() else { return }
             var tokens: [AttachmentToken] = []
             for url in urls {
-                if let t = try? store.importFile(url) {
-                    tokens.append(t)
+                do { tokens.append(try store.importFile(url)) } catch {
+                    attachLog.error("editor import FAILED \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
+            attachLog.log("editor import: urls=\(urls.count) imported=\(tokens.count) at=\(index)")
             if tokens.isEmpty {
                 NSSound.beep() // unreadable / over the size cap
                 return
@@ -435,7 +458,9 @@ struct NativeNoteEditor: NSViewRepresentable {
         // "unrecognized selector" mid-drag-completion and killed the whole drop. (NSTextView
         // DOES implement them, which is why the preview's overrides may call super.)
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            guard store?() != nil, urls(sender.draggingPasteboard) != nil else { return [] }
+            let u = urls(sender.draggingPasteboard)
+            attachLog.log("margin entered: store=\(self.store?() != nil) urls=\(u?.count ?? 0)")
+            guard store?() != nil, u != nil else { return [] }
             overlay.isHidden = false
             return .copy
         }
@@ -459,6 +484,7 @@ struct NativeNoteEditor: NSViewRepresentable {
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
             overlay.isHidden = true
             guard let dropped = urls(sender.draggingPasteboard) else { return false }
+            attachLog.log("margin perform: urls=\(dropped.count)")
             onDropAtEnd?(dropped)
             return true
         }

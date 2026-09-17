@@ -8,8 +8,14 @@
 import AppKit
 import CalendarEngine
 import CalendarRender
+import os
 import PDFKit
 import UniformTypeIdentifiers
+
+/// Drag/drop tracing for the attachment pipeline (`log stream --predicate 'subsystem ==
+/// "dev.magnifical.calendar" AND category == "attach"'`) — every destination logs entered/
+/// prepare/perform + import outcomes, so a failing drop names its dying hop.
+let attachLog = Logger(subsystem: "dev.magnifical.calendar", category: "attach")
 
 /// The shared drag-over affordance (the .ics import overlay's language): a dimmed mask, an
 /// accent dashed inner ring, and a centered ＋ over "Add Attachment". Drawn by the preview's
