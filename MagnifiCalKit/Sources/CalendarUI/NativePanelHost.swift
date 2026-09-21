@@ -38,8 +38,16 @@ struct NativePanelHost: View, Equatable {
         a.scope == b.scope && a.key == b.key && a.tab == b.tab
             && a.dataStamp == b.dataStamp && a.noteMode == b.noteMode
             && a.warmAllTabs == b.warmAllTabs // late warms must reach onChange
+            && a.live == b.live // park/unpark must re-hide/show the AppKit note views
     }
 
+    /// This panel is the LIVE carousel member (not a parked/pre-built twin). Parked panels'
+    /// AppKit views must be HIDDEN (isHidden, via NativeNotePanel.active): SwiftUI's
+    /// .opacity(0)/.allowsHitTesting(false) at the mount does NOT reach the hosted NSViews —
+    /// field-traced twice, a parked neighbor's editor kept winning DRAG hit-tests and drops
+    /// landed silently in another day's note (surfacing only when that day was later opened).
+    /// isHidden is the only gate AppKit's drag routing respects.
+    var live: Bool = true
     /// Warm the inactive tabs too (parked/pre-built panels only): mounting happens at rest,
     /// staggered one tab per runloop turn, so the first ⌘E/⌘J flip finds its body built.
     var warmAllTabs: Bool = false
@@ -74,7 +82,7 @@ struct NativePanelHost: View, Equatable {
             }
             if tab == .note || mountedTabs.contains(.note) {
                 NativeNotePanel(engine: engine, scope: scope, key: key, theme: theme,
-                                dataStamp: dataStamp, active: tab == .note,
+                                dataStamp: dataStamp, active: live && tab == .note,
                                 noteMode: $noteMode, nav: nav)
                     .opacity(tab == .note ? 1 : 0)
                     .allowsHitTesting(tab == .note)

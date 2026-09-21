@@ -784,6 +784,7 @@ public struct CalendarView: View {
                                             .PendingTodoDelete(text: text, source: source, confirm: confirm)
                                     },
                                     onRowMenu: { ui.todoMenu = $0 },
+                                    live: isLive,
                                     warmAllTabs: NativeDash.warmIds.contains(panel.panelId),
                                     trimToActiveTab: !isLive
                                         && !NativeDash.warmIds.contains(panel.panelId))

@@ -135,6 +135,17 @@ final class AttachmentDropTests: XCTestCase {
                         "the dropped token landed whole on its own line below")
     }
 
+    func testHiddenEditorRefusesDrops() {
+        // Parked dashboard panels hide their AppKit note views (NativePanelHost.live →
+        // NativeNotePanel.active → isHidden) — and a hidden view must refuse the drag, so an
+        // invisible neighbor day can never swallow a drop meant for the visible note.
+        let tv = hosted(NativeNoteEditor.EditorTextView())
+        tv.attachmentStore = { [store] in store }
+        tv.isHidden = true
+        XCTAssertEqual(tv.draggingEntered(DragStub(urls: [fileURL])), [],
+                       "hidden (parked) editors never accept drops")
+    }
+
     func testMarginScrollDrop() {
         let scroll = hosted(NativeNoteEditor.MarginDropScrollView())
         scroll.frame = NSRect(x: 0, y: 0, width: 400, height: 500)
