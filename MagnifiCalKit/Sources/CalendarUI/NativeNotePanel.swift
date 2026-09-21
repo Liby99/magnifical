@@ -81,18 +81,13 @@ struct NativeNotePanel: View {
                     focusPulse: editorFocusSeq,
                     attachments: engine.attachments
                 )
-            } else if text.trimmingCharacters(in: .whitespaces).isEmpty {
-                Text(
-                    "No \(scope == "day" ? "daily" : scope == "week" ? "weekly" : "monthly") note yet — switch to Editor to write one."
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(theme.text.opacity(0.5))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.top, 6)
             } else {
                 // The refined preview engine: one selectable NSTextView document (tables,
                 // code highlighting, token pills; whole-content copy). ⌘-click → edit at line;
-                // checkbox taps flip the source line in place.
+                // checkbox taps flip the source line in place. Mounted EVEN WHEN EMPTY — the
+                // preview is also the pane's drop target (drag-in attachments), so the empty
+                // state floats its prompt OVER a live preview instead of replacing it (a bare
+                // Text placeholder was a drop dead-zone: no overlay, no way to add files).
                 MarkdownPreview(text: text, theme: theme, active: active,
                                 onToggle: { line in
                                     if NSEvent.modifierFlags.contains(.command) {
@@ -124,6 +119,17 @@ struct NativeNotePanel: View {
                                     engine.setDailyNote(storageKey, cur.isEmpty ? md : cur + "\n\n" + md)
                                     engine.wake()
                                 })
+                    .overlay(alignment: .topLeading) {
+                        if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                            Text(
+                                "No \(scope == "day" ? "daily" : scope == "week" ? "weekly" : "monthly") note yet — switch to Editor to write one, or drop a file here."
+                            )
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.text.opacity(0.5))
+                            .padding(.top, 6)
+                            .allowsHitTesting(false) // prompt floats; drags reach the preview
+                        }
+                    }
             }
         }
         // Content-based default whenever the panel lands on a DIFFERENT note: empty → edit,
