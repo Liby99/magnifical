@@ -17,6 +17,25 @@ import UniformTypeIdentifiers
 /// prepare/perform + import outcomes, so a failing drop names its dying hop.
 let attachLog = Logger(subsystem: "dev.magnifical.calendar", category: "attach")
 
+extension NSView {
+    /// PARKED dashboard panels stay mounted at SwiftUI-opacity 0 for instant swipes — but
+    /// SwiftUI's opacity/allowsHitTesting gating does NOT reach AppKit's drag-destination
+    /// hit-test, so an invisible neighbor panel's editor could STEAL a drop (field-traced:
+    /// a pdf dragged onto today's note imported into tomorrow's). Same layer-opacity walk
+    /// DashRightClickLayer uses to keep parked panels from stealing right-clicks.
+    var attachDropVisible: Bool {
+        guard window != nil, !isHiddenOrHasHiddenAncestor else { return false }
+        var l = layer
+        while let cur = l {
+            if cur.opacity < 0.01 {
+                return false
+            }
+            l = cur.superlayer
+        }
+        return true
+    }
+}
+
 /// The shared drag-over affordance (the .ics import overlay's language): a dimmed mask, an
 /// accent dashed inner ring, and a centered ＋ over "Add Attachment". Drawn by the preview's
 /// own draw pass AND the editor's margin-drop overlay view — one visual, two hosts.

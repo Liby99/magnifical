@@ -72,11 +72,24 @@ final class AttachmentDropTests: XCTestCase {
 
     override func tearDown() {
         try? FileManager.default.removeItem(at: dir)
+        host?.contentView = nil
+        host = nil
         super.tearDown()
     }
 
+    /// The drop guards refuse windowless/invisible views (the parked-panel steal fix) —
+    /// give each view a real offscreen window so it counts as visible.
+    private var host: NSWindow?
+    private func hosted<V: NSView>(_ v: V) -> V {
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
+                         styleMask: .borderless, backing: .buffered, defer: true)
+        w.contentView = v
+        host = w
+        return v
+    }
+
     func testPreviewDrop() {
-        let tv = PreviewTextView()
+        let tv = hosted(PreviewTextView())
         tv.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         var appended: String?
         tv.attachmentStore = { [store] in store }
@@ -90,7 +103,7 @@ final class AttachmentDropTests: XCTestCase {
     }
 
     func testEditorTextDrop() {
-        let tv = NativeNoteEditor.EditorTextView()
+        let tv = hosted(NativeNoteEditor.EditorTextView())
         tv.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
         tv.isRichText = false
         tv.string = "line one"
@@ -103,7 +116,7 @@ final class AttachmentDropTests: XCTestCase {
     }
 
     func testMarginScrollDrop() {
-        let scroll = NativeNoteEditor.MarginDropScrollView()
+        let scroll = hosted(NativeNoteEditor.MarginDropScrollView())
         scroll.frame = NSRect(x: 0, y: 0, width: 400, height: 500)
         scroll.installMarginDrop()
         scroll.store = { [store] in store }

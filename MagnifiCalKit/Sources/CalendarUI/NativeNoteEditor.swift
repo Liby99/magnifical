@@ -93,6 +93,10 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            guard attachDropVisible else {
+                attachLog.log("editor entered REFUSED: invisible (parked panel)")
+                return [] // a parked twin must never steal the drop from the visible editor
+            }
             let urls = fileURLs(on: sender.draggingPasteboard)
             attachLog.log("editor entered: store=\(self.attachmentStore?() != nil) urls=\(urls?.count ?? 0)")
             if attachmentStore?() != nil, urls != nil {
@@ -120,13 +124,14 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            if attachmentStore?() != nil, let urls = fileURLs(on: sender.draggingPasteboard) {
+            if attachDropVisible, attachmentStore?() != nil,
+               let urls = fileURLs(on: sender.draggingPasteboard) {
                 attachLog.log("editor perform: urls=\(urls.count)")
                 let p = convert(sender.draggingLocation, from: nil)
                 importFiles(urls, at: characterIndexForInsertion(at: p))
                 return true
             }
-            attachLog.log("editor perform FELL THROUGH to super")
+            attachLog.log("editor perform FELL THROUGH to super (visible=\(self.attachDropVisible))")
             return super.performDragOperation(sender)
         }
 
@@ -458,6 +463,10 @@ struct NativeNoteEditor: NSViewRepresentable {
         // "unrecognized selector" mid-drag-completion and killed the whole drop. (NSTextView
         // DOES implement them, which is why the preview's overrides may call super.)
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            guard attachDropVisible else {
+                attachLog.log("margin entered REFUSED: invisible (parked panel)")
+                return []
+            }
             let u = urls(sender.draggingPasteboard)
             attachLog.log("margin entered: store=\(self.store?() != nil) urls=\(u?.count ?? 0)")
             guard store?() != nil, u != nil else { return [] }

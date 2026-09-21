@@ -563,6 +563,10 @@ final class PreviewTextView: NSTextView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard attachDropVisible else {
+            attachLog.log("preview entered REFUSED: invisible (parked panel)")
+            return []
+        }
         let urls = fileURLsOnPasteboard(sender.draggingPasteboard)
         attachLog.log("preview entered: append=\(self.onAppendMarkdown != nil) store=\(self.attachmentStore?() != nil) urls=\(urls?.count ?? 0)")
         if onAppendMarkdown != nil, attachmentStore?() != nil, urls != nil {
