@@ -54,6 +54,9 @@ struct NativeNoteEditor: NSViewRepresentable {
     /// The attachment blob store: paste/drag of files or images imports them and inserts
     /// `![@kind:name](ccfile:…)` tokens at the caret. nil = attachments off (plain paste).
     var attachments: AttachmentStore?
+    /// False while a MODAL surface covers this pane (the event drawer over a dashboard
+    /// note): visible-but-inert — see MarkdownPreview.hitTestable.
+    var hitTestable = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -437,7 +440,7 @@ struct NativeNoteEditor: NSViewRepresentable {
     /// overlay and drop-append at the END of the note; drags over the text itself stay with
     /// the text view's caret-positioned drop (no overlay), because AppKit routes a drag to
     /// the deepest registered view — this scroll view only ever hears the margin.
-    final class MarginDropScrollView: NSScrollView {
+    final class MarginDropScrollView: InertableScrollView {
         var store: (() -> AttachmentStore?)?
         var onDropAtEnd: (([URL]) -> Void)?
         private let overlay = OverlayView()
@@ -579,6 +582,7 @@ struct NativeNoteEditor: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         scroll.isHidden = !active // parked tab: dormant cursor rects (see `active`)
+        (scroll as? InertableScrollView)?.inert = !hitTestable // drawer-covered: mouse passes over
         let co = context.coordinator
         session?.end = { [weak co] in co?.stampCreatedIfDirty() } // keep the handle fresh
         // Re-key = the previous note's editing session ENDS: stamp it through the OLD parent's

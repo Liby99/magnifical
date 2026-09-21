@@ -25,6 +25,10 @@ struct MarkdownPreview: NSViewRepresentable {
     /// Files dropped ONTO the preview import + append their tokens to the note (the preview
     /// has no caret). nil = preview drops off.
     var onAppend: ((String) -> Void)?
+    /// False while a MODAL surface covers this pane (the event drawer): the pane stays
+    /// visible (blurred background) but goes hit-test-inert — hover, clicks, drops, and the
+    /// mouse itself pass over it (the drawer's resize handle was unreachable through it).
+    var hitTestable = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -50,7 +54,7 @@ struct MarkdownPreview: NSViewRepresentable {
         tv.delegate = context.coordinator
         tv.registerForDraggedTypes([.fileURL]) // see updateDragTypeRegistration — non-editable
         context.coordinator.textView = tv
-        let scroll = NSScrollView()
+        let scroll = InertableScrollView()
         scroll.documentView = tv
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
@@ -74,6 +78,8 @@ struct MarkdownPreview: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         scroll.isHidden = !active // parked tab: dormant cursor rects (see `active`)
+        (scroll as? InertableScrollView)?.inert = !hitTestable
+        context.coordinator.textView?.suspended = !hitTestable // tracking areas ignore hitTest
         context.coordinator.rebuild(self)
     }
 
@@ -402,8 +408,18 @@ final class PreviewTextView: NSTextView {
         hoverTracking = t
     }
 
+    /// Modal cover (see MarkdownPreview.hitTestable): tracking areas fire regardless of
+    /// hitTest, so the hover ring needs its own gate while the pane is inert.
+    var suspended = false {
+        didSet { if suspended, hoveredAtt != nil {
+            hoveredAtt = nil
+            needsDisplay = true
+        } }
+    }
+
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        guard !suspended else { return }
         let hit = attachmentHit(event)?.charIndex
         if hit != hoveredAtt {
             hoveredAtt = hit

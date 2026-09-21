@@ -24,6 +24,9 @@ struct NativeNotePanel: View {
     /// False while this panel is a PARKED tab — forwarded to the hosted AppKit views, whose
     /// cursor rects otherwise stay live at SwiftUI-opacity 0 (the phantom I-beam).
     var active = true
+    /// False while the event drawer covers the dashboard: the note stays visible (blurred
+    /// background) but its AppKit views go hit-test-inert — see MarkdownPreview.hitTestable.
+    var interactive = true
     @Binding var noteMode: NotesMode
     var nav: NativeDashNavModel? // note-jump line landings + ⌘E focus requests
 
@@ -79,7 +82,8 @@ struct NativeNotePanel: View {
                     focusLine: pendingEditLine,
                     onFocusLineHandled: { pendingEditLine = nil },
                     focusPulse: editorFocusSeq,
-                    attachments: engine.attachments
+                    attachments: engine.attachments,
+                    hitTestable: interactive
                 )
             } else {
                 // The refined preview engine: one selectable NSTextView document (tables,
@@ -118,7 +122,8 @@ struct NativeNotePanel: View {
                                     let cur = engine.dailyNote(storageKey)
                                     engine.setDailyNote(storageKey, cur.isEmpty ? md : cur + "\n\n" + md)
                                     engine.wake()
-                                })
+                                },
+                                hitTestable: interactive)
                     .overlay(alignment: .topLeading) {
                         if text.trimmingCharacters(in: .whitespaces).isEmpty {
                             Text(

@@ -17,6 +17,17 @@ import UniformTypeIdentifiers
 /// prepare/perform + import outcomes, so a failing drop names its dying hop.
 let attachLog = Logger(subsystem: "dev.magnifical.calendar", category: "attach")
 
+/// A scroll view that can go HIT-TEST-INERT: visible (the drawer blurs it as background) but
+/// transparent to the mouse. SwiftUI content drawn OVER a hosted NSView never wins AppKit
+/// hit-testing — with the event drawer open, the weekly note's preview swallowed the mouse
+/// meant for the drawer's resize handle (and its attachment cards still hovered/clicked).
+@MainActor class InertableScrollView: NSScrollView {
+    var inert = false
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        inert ? nil : super.hitTest(point)
+    }
+}
+
 extension NSView {
     /// PARKED dashboard panels stay mounted at SwiftUI-opacity 0 for instant swipes — but
     /// SwiftUI's opacity/allowsHitTesting gating does NOT reach AppKit's drag-destination

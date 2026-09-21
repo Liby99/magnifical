@@ -785,6 +785,8 @@ public struct CalendarView: View {
                                     },
                                     onRowMenu: { ui.todoMenu = $0 },
                                     live: isLive,
+                                    interactive: ui.openEventId == nil, // drawer covers the panels
+
                                     warmAllTabs: NativeDash.warmIds.contains(panel.panelId),
                                     trimToActiveTab: !isLive
                                         && !NativeDash.warmIds.contains(panel.panelId))
