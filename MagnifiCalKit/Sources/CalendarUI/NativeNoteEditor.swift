@@ -184,19 +184,28 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         /// Insert as BLOCK tokens — each on its own line (consecutive lines form the preview
-        /// grid). Via insertText so the edit is undoable and flows through textDidChange.
+        /// grid). NEVER SPLITS a line: a mid-line drop point snaps to just AFTER the line
+        /// under the cursor (dropping onto an existing token line otherwise cut ITS token in
+        /// half — degenerate half-links in the source). Via insertText so the edit is
+        /// undoable and flows through textDidChange.
         private func insertTokens(_ tokens: [AttachmentToken], at index: Int) {
             let ns = string as NSString
-            let idx = max(0, min(index, ns.length))
+            var idx = max(0, min(index, ns.length))
+            let lineR = ns.lineRange(for: NSRange(location: idx, length: 0))
+            let lineHasContent = !ns.substring(with: lineR)
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if lineHasContent {
+                idx = lineR.location + lineR.length // after the line (past its \n, or doc end)
+            }
             let atLineStart = idx == 0 || ns.character(at: idx - 1) == 0x0A
             let atLineEnd = idx == ns.length || ns.character(at: idx) == 0x0A
             var s = tokens.map(\.markdown).joined(separator: "\n")
             if !atLineStart {
                 s = "\n" + s
-            }
+            } // the snapped line was the LAST line (no trailing \n)
             if !atLineEnd {
                 s += "\n"
-            }
+            } // a following line exists — keep it separate
             insertText(s, replacementRange: NSRange(location: idx, length: 0))
         }
 

@@ -115,6 +115,26 @@ final class AttachmentDropTests: XCTestCase {
                       "the drop inserted a token, got: \(tv.string)")
     }
 
+    func testMidLineDropNeverSplitsTheLine() throws {
+        // The field bug: a drop landing MID-token-line cut the existing token in half,
+        // producing degenerate half-links. A mid-line drop must snap below the line.
+        let existing = try store.importData(Data("existing pdf-ish".utf8), suggestedName: "main.pdf")
+        let tv = hosted(NativeNoteEditor.EditorTextView())
+        tv.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+        tv.isRichText = false
+        tv.string = existing.markdown // one token line, no trailing newline
+        tv.attachmentStore = { [store] in store }
+        tv.layoutManager?.ensureLayout(for: tv.textContainer!)
+        let drag = DragStub(urls: [fileURL]) // draggingLocation (10,10) = INSIDE line 1
+        XCTAssertTrue(tv.performDragOperation(drag))
+        let lines = tv.string.components(separatedBy: "\n").filter { !$0.isEmpty }
+        XCTAssertEqual(lines.count, 2, "no split halves: \(tv.string)")
+        XCTAssertEqual(AttachmentTokens.blockToken(line: lines[0])?.id, existing.id,
+                       "the existing token line is INTACT")
+        XCTAssertNotNil(AttachmentTokens.blockToken(line: lines[1]),
+                        "the dropped token landed whole on its own line below")
+    }
+
     func testMarginScrollDrop() {
         let scroll = hosted(NativeNoteEditor.MarginDropScrollView())
         scroll.frame = NSRect(x: 0, y: 0, width: 400, height: 500)
