@@ -37,6 +37,10 @@ struct ChatTurn: Identifiable, Codable, Equatable {
     var id = UUID()
     var role: Role
     var text: String
+    /// Wall-clock send time. USER turns feed the wire's `[YYYY-MM-DD HH:mm]` stamps, so the
+    /// model can reason about elapsed time in long conversations. Optional: conversations
+    /// saved before the field existed decode as nil (no stamp).
+    var at: Date? = nil
     var icon: String? = nil // SF Symbol for an .action chip
     var confirm: ConfirmRequest? = nil // payload for a .confirm card
     var resumeConsumed: Bool = false // a .resume ("Continue") card that's been tapped

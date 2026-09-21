@@ -88,7 +88,7 @@ public final class AssistantState {
         for i in messages.indices where messages[i].blockedReq?.status == .pending {
             messages[i].blockedReq?.status = .dismissed
         }
-        messages.append(ChatTurn(role: .user, text: text))
+        messages.append(ChatTurn(role: .user, text: text, at: Date()))
         messages.append(ChatTurn(role: .typing, text: ""))
         busy = true
         persistCurrent() // the conversation appears in the sidebar as soon as it starts
@@ -125,6 +125,15 @@ public final class AssistantState {
         for _ in 0 ..< Self.maxSteps {
             if Task.isCancelled {
                 return
+            }
+            // The system prompt carries the CURRENT date/time — regenerate it for EVERY request.
+            // Resumed wires (a "Continue" card or a blocked-card "Allow", possibly sitting for
+            // hours) and long tool loops would otherwise pin the clock to whenever the wire was
+            // first built, and the model reasons from a stale "today".
+            if wire.first?.role == "system" {
+                wire[0] = ChatMessage(role: "system", content: systemPrompt())
+            } else {
+                wire.insert(ChatMessage(role: "system", content: systemPrompt()), at: 0)
             }
             let resp: ChatResponse
             do {
@@ -471,7 +480,11 @@ public final class AssistantState {
         var wire: [ChatMessage] = [ChatMessage(role: "system", content: systemPrompt())]
         for turn in messages {
             switch turn.role {
-            case .user: wire.append(ChatMessage(role: "user", content: turn.text))
+            case .user:
+                // Send-time stamp: a conversation can span hours/days, and the system prompt's
+                // clock only says "now" — the stamps let the model place each request in time.
+                let stamped = turn.at.map { "[\(Self.stamp($0, zone: viewZoneId()))] \(turn.text)" }
+                wire.append(ChatMessage(role: "user", content: stamped ?? turn.text))
             case .assistant: wire.append(ChatMessage(role: "assistant", content: turn.text))
             case .typing, .action, .confirm, .resume, .blocked:
                 break // transient UI-only rows — not LLM history
@@ -480,16 +493,41 @@ public final class AssistantState {
         return wire
     }
 
+    /// The resolved IANA id of the user's current view timezone ("auto" → the device zone) —
+    /// the ONE zone the prompt's date/clock and the message stamps are expressed in, matching
+    /// timezoneLine's declaration to the model.
+    private func viewZoneId() -> String {
+        engine.map { DeadlineTZ.concrete($0.mainTz) } ?? TimeZone.current.identifier
+    }
+
+    /// "YYYY-MM-DD HH:mm" in `zone` (main-actor only — shared formatter, zone set per call).
+    private static let stampFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+
+    private static func stamp(_ d: Date, zone: String) -> String {
+        stampFmt.timeZone = TimeZone(identifier: zone) ?? .current
+        return stampFmt.string(from: d)
+    }
+
     /// The system prompt — ported from the web's buildSystem (src/lib/assistant/agent.ts), with
     /// native-only additions (daily notes, track rename, scoped-reads convention). Recurrence and
     /// per-occurrence delete are supported natively too, matching the web text.
     private func systemPrompt() -> String {
         let now = Date()
-        let today = isoDayString(now)
+        let zone = viewZoneId()
+        // Date, weekday, and clock all from the SAME zone (the view zone timezoneLine declares),
+        // so they can never disagree around midnight.
+        let stamp = Self.stamp(now, zone: zone) // "YYYY-MM-DD HH:mm"
+        Self.weekdayFmt.timeZone = TimeZone(identifier: zone) ?? .current
         let weekday = Self.weekdayFmt.string(from: now)
         var lines: [String] = [
             "You are the assistant inside MagnifiCal, a research calendar app. You help the user understand and plan their calendar.",
-            "Today is \(weekday), \(today).",
+            "Today is \(weekday), \(stamp.prefix(10)). The current time is \(stamp.suffix(5)) (24h). This is refreshed on EVERY request — trust it over any earlier time mentioned in the conversation.",
+            "Each user message is prefixed with its send time, like `[2026-09-21 14:32] …` — metadata for reasoning about elapsed time (a conversation can span hours or days); never echo the bracket stamp back.",
             viewContextLine(),
             timezoneLine(),
         ]

@@ -55,13 +55,14 @@ struct GetScreenStateTool: AssistantTool {
 
     func run(_ args: JSONValue, _ ctx: ToolContext) async throws -> JSONValue {
         guard let e = ctx.engine else { return .obj(["error": .str("calendar unavailable")]) }
-        let now = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        let now = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: Date())
         return .obj([
             "year": .num(e.year),
             "zoom": .str(zoomName(e)),
             "focusedMonth": .num(e.focus),
             "focusedMonthName": .str(monthName(e.focus)),
             "today": .str(iso(now.year ?? e.year, (now.month ?? 1) - 1, now.day ?? 1)),
+            "time": .str(String(format: "%02d:%02d", now.hour ?? 0, now.minute ?? 0)), // live clock, 24h
         ])
     }
 }

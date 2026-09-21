@@ -993,6 +993,16 @@ private final class AttachmentPreviewItem: NSObject, QLPreviewItem {
                                             to out: inout NSMutableAttributedString,
                                             lineMap: inout [(NSRange, Int)], theme: Theme) {
         let compact = run.count > 1
+        // A card as the DOCUMENT'S FIRST content: paragraphSpacingBefore doesn't apply to the
+        // first paragraph, and the pane's 6pt top inset is less than the selection/hover
+        // ring's overhang (2.5pt inset + stroke) — the ring's top edge was clipped. A small
+        // explicit spacer line restores the margin only in that case.
+        if out.length == 0 {
+            let spacer = NSMutableParagraphStyle()
+            spacer.minimumLineHeight = 5
+            spacer.maximumLineHeight = 5
+            out.append(NSAttributedString(string: "\n", attributes: [.paragraphStyle: spacer]))
+        }
         let para = paragraph(spacing: 12) // room below the card row
         para.paragraphSpacingBefore = 8 // …and above (text otherwise butts the card)
         para.lineSpacing = 8 // grid rows breathe
