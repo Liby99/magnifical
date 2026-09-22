@@ -408,23 +408,38 @@ final class PreviewTextView: NSTextView {
         hoverTracking = t
     }
 
-    /// Modal cover (see MarkdownPreview.hitTestable): tracking areas fire regardless of
-    /// hitTest, so the hover ring needs its own gate while the pane is inert.
+    /// Modal cover (see MarkdownPreview.hitTestable): tracking areas AND cursor rects fire
+    /// regardless of hitTest, so the hover ring and the CURSOR need their own gate while the
+    /// pane is inert — NSTextView's link cursor (pointing hand over a card) otherwise keeps
+    /// out-fighting the drawer resize handle's ↔ arrow.
     var suspended = false {
-        didSet { if suspended, hoveredAtt != nil {
-            hoveredAtt = nil
-            needsDisplay = true
-        } }
+        didSet { guard suspended != oldValue else { return }
+            if suspended, hoveredAtt != nil {
+                hoveredAtt = nil
+                needsDisplay = true
+            }
+            window?.invalidateCursorRects(for: self) // drop / restore the link cursor rects
+        }
     }
 
     override func mouseMoved(with event: NSEvent) {
+        guard !suspended else { return } // super would assert the I-beam / hand cursor
         super.mouseMoved(with: event)
-        guard !suspended else { return }
         let hit = attachmentHit(event)?.charIndex
         if hit != hoveredAtt {
             hoveredAtt = hit
             needsDisplay = true
         }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        guard !suspended else { return }
+        super.cursorUpdate(with: event)
+    }
+
+    override func resetCursorRects() {
+        guard !suspended else { return } // no rects at all while covered
+        super.resetCursorRects()
     }
 
     override func mouseExited(with event: NSEvent) {

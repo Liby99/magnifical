@@ -77,6 +77,30 @@ struct NativeNoteEditor: NSViewRepresentable {
         var themeText: NSColor = .labelColor
         var attachmentStore: (() -> AttachmentStore?)?
 
+        /// Covered by the drawer (see MarkdownPreview.suspended): cursor rects and
+        /// mouseMoved assert the I-beam regardless of hitTest — gate them so the drawer's
+        /// own cursors (resize ↔ etc.) win over the blurred background editor.
+        var suspended = false {
+            didSet { if suspended != oldValue {
+                window?.invalidateCursorRects(for: self)
+            } }
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            guard !suspended else { return }
+            super.mouseMoved(with: event)
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            guard !suspended else { return }
+            super.cursorUpdate(with: event)
+        }
+
+        override func resetCursorRects() {
+            guard !suspended else { return }
+            super.resetCursorRects()
+        }
+
         // ── Attachment import: paste / drag (design §5.1) ─────────────────────────────
         /// AppKit recomputes a text view's drag registration on focus/editability changes,
         /// and a PLAIN-text view's own list doesn't reliably include file URLs — if it drops
@@ -583,6 +607,7 @@ struct NativeNoteEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         scroll.isHidden = !active // parked tab: dormant cursor rects (see `active`)
         (scroll as? InertableScrollView)?.inert = !hitTestable // drawer-covered: mouse passes over
+        (scroll.documentView as? EditorTextView)?.suspended = !hitTestable // …and no I-beam fights
         let co = context.coordinator
         session?.end = { [weak co] in co?.stampCreatedIfDirty() } // keep the handle fresh
         // Re-key = the previous note's editing session ENDS: stamp it through the OLD parent's
