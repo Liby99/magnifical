@@ -1,15 +1,18 @@
-// Attachment preview CARDS (docs/attachments-design.md §5.3–5.4, P0): the composed NSImages
-// the markdown preview embeds as attachment glyphs. Solitary block token → a content card
-// min(480, column) wide; consecutive tokens → compact ~224×150 grid cells; unknown/missing →
-// the 70pt metadata card. P0 starter set: images (+GIF badge), .pdf (PDFKit first page),
-// simple text (.txt .json .md .js .c) self-rendered via CodeHighlight — everything else gets
-// the metadata card until P4. Cards are rasterized per (id, width, variant, theme) and cached.
+// Attachment preview CARDS (docs/attachments-design.md §5.3–5.4): the composed NSImages the
+// markdown preview embeds as attachment glyphs. Solitary block token → a content card
+// min(480, column) wide; consecutive tokens → compact ~224×128 grid cells; unknown/missing →
+// the 70pt metadata card. Full type breadth (P4): images (+GIF badge), .pdf (PDFKit first
+// page), EVERY readable text file self-rendered via CodeHighlight (the §5.3 language map;
+// QL can't thumbnail bare source at all), .csv/.tsv as a real table, Office/RTF/iWork as
+// async Quick Look first-page cards (disk-cached, sentinel on decline) — only genuinely
+// opaque types get the metadata card. Rasterized per (id, width, variant, theme) and cached.
 
 import AppKit
 import CalendarEngine
 import CalendarRender
 import os
 import PDFKit
+import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
 /// Drag/drop tracing for the attachment pipeline (`log stream --predicate 'subsystem ==
@@ -87,8 +90,34 @@ extension NSView {
     nonisolated static let gridCellW: CGFloat = 224
     nonisolated static let gridCellH: CGFloat = 128
     nonisolated static let metaH: CGFloat = 70
-    private static let imageMaxH: CGFloat = 240
     private static let corner: CGFloat = 8
+
+    /// Size-class caps for SOLITARY cards (`size:` token; height is the size's main effect).
+    /// Rescaled 2026-09-21: big = the original default card, medium = the old small, and
+    /// small is a genuinely small chip-like card (half medium's width, ~3/4 its height).
+    nonisolated static func maxW(_ size: AttachmentSize) -> CGFloat {
+        switch size {
+        case .small: 170
+        case .medium: 340
+        case .big: solitaryMaxW // 480
+        }
+    }
+
+    nonisolated static func maxH(_ size: AttachmentSize) -> CGFloat {
+        switch size {
+        case .small: 105
+        case .medium: 140
+        case .big: 240
+        }
+    }
+
+    nonisolated static func textLines(_ size: AttachmentSize) -> Int {
+        switch size {
+        case .small: 3
+        case .medium: 5
+        case .big: 8
+        }
+    }
 
     private static let cache = NSCache<NSString, NSImage>()
 
@@ -96,56 +125,103 @@ extension NSView {
     /// the caller); `compact` = grid-cell variant.
     static func card(for token: AttachmentToken, store: AttachmentStore, width: CGFloat,
                      compact: Bool, theme: Theme) -> NSImage {
-        let key = "\(token.id)|\(Int(width))|\(compact)|\(theme.dark)" as NSString
+        // The waiting card (blob not local yet — token synced before its NoteFile) and the
+        // doc family's "rendering…" placeholder are NEVER cached: each must become the
+        // content card the moment its pixels exist, and the cache key can't see arrival.
+        guard store.url(forId: token.id) != nil else {
+            return compose(token: token, store: store, width: width, compact: compact, theme: theme).img
+        }
+        let key = "\(token.id)|\(Int(width))|\(compact)|\(theme.dark)|\(token.size.rawValue)" as NSString
         if let hit = cache.object(forKey: key) {
             return hit
         }
-        let img = compose(token: token, store: store, width: width, compact: compact, theme: theme)
-        cache.setObject(img, forKey: key)
+        let (img, cacheable) = compose(token: token, store: store, width: width,
+                                       compact: compact, theme: theme)
+        if cacheable {
+            cache.setObject(img, forKey: key)
+        }
         return img
     }
 
     private static func compose(token: AttachmentToken, store: AttachmentStore, width: CGFloat,
-                                compact: Bool, theme: Theme) -> NSImage {
+                                compact: Bool, theme: Theme) -> (img: NSImage, cacheable: Bool) {
         guard let url = store.url(forId: token.id), let meta = store.meta(forId: token.id) else {
-            return metaCard(name: token.name, detail: "missing — not on this Mac yet",
-                            icon: NSWorkspace.shared.icon(for: .data), width: width, theme: theme)
+            return (metaCard(name: token.name, detail: "waiting for iCloud…",
+                             icon: NSWorkspace.shared.icon(for: .data), width: width, theme: theme),
+                    false)
         }
         let ext = (meta.name as NSString).pathExtension.lowercased()
         let family = AttachmentStore.kind(forUTI: meta.uti, name: meta.name)
         switch family {
         case .image:
             if let img = NSImage(contentsOf: url) {
-                return imageCard(img, badge: ext == "gif" ? "GIF" : nil, name: token.name,
-                                 width: width, compact: compact, theme: theme)
+                return (imageCard(img, badge: ext == "gif" ? "GIF" : nil, name: token.name,
+                                  width: width, size: token.size, compact: compact, theme: theme),
+                        true)
             }
         case .pdf:
             if let doc = PDFDocument(url: url), let page = doc.page(at: 0) {
-                return pdfCard(page, pages: doc.pageCount, name: token.name, bytes: meta.bytes,
-                               width: width, compact: compact, theme: theme)
+                return (pdfCard(page, pages: doc.pageCount, name: token.name, bytes: meta.bytes,
+                                width: width, size: token.size, compact: compact, theme: theme),
+                        true)
             }
         case .code, .data:
-            if Self.starterTextExts.contains(ext),
-               let text = textPrefix(of: url) {
-                return textCard(text, ext: ext, name: token.name, bytes: meta.bytes,
-                                width: width, compact: compact, theme: theme)
+            // P4 full breadth: EVERY readable text file gets a content card — known
+            // extensions syntax-colored, csv/tsv as a real table, the rest plain mono.
+            if ["csv", "tsv"].contains(ext), let text = textPrefix(of: url) {
+                return (tableCard(text, tab: ext == "tsv", name: token.name, bytes: meta.bytes,
+                                  width: width, size: token.size, compact: compact, theme: theme),
+                        true)
             }
-        case .doc, .file:
-            break // P4 upgrades doc to a QL page card; P0 metadata card below
+            if let text = textPrefix(of: url) {
+                return (textCard(text, ext: ext, name: token.name, bytes: meta.bytes,
+                                 width: width, size: token.size, compact: compact, theme: theme),
+                        true)
+            }
+        case .doc:
+            // Office/RTF/iWork: a real first-page card via Quick Look (§5.5 verified the
+            // system renders genuine pages even without Office installed). Async on first
+            // sight — placeholder now, thumb lands on disk, the arrival bump repaints.
+            switch docThumb(url: url, token: token, store: store, width: width, compact: compact) {
+            case let .ready(page):
+                return (pageCard(page, name: token.name, bytes: meta.bytes, width: width,
+                                 size: token.size, compact: compact, theme: theme), true)
+            case .rendering:
+                return (metaCard(name: token.name, detail: "rendering preview…",
+                                 icon: NSWorkspace.shared.icon(for: UTType(meta.uti) ?? .data),
+                                 width: width, theme: theme), false)
+            case .unavailable:
+                break // QL declined (icon-only/failed) → the metadata card, permanently
+            }
+        case .file:
+            // Unknown TEXT types (UTI-decided: .ini, .log, …) still get a plain-mono content
+            // card — "never just an icon" (§5.3). Opaque binaries fall through.
+            if UTType(meta.uti)?.conforms(to: .text) == true, let text = textPrefix(of: url) {
+                return (textCard(text, ext: ext, name: token.name, bytes: meta.bytes,
+                                 width: width, size: token.size, compact: compact, theme: theme),
+                        true)
+            }
         }
-        return metaCard(name: token.name, detail: detailLine(meta),
-                        icon: NSWorkspace.shared.icon(for: UTType(meta.uti) ?? .data),
-                        width: width, theme: theme)
+        return (metaCard(name: token.name, detail: detailLine(meta),
+                         icon: NSWorkspace.shared.icon(for: UTType(meta.uti) ?? .data),
+                         width: width, theme: theme),
+                true)
     }
 
-    /// P0 starter set for self-rendered text cards (design §10 P0).
-    private static let starterTextExts: Set<String> = ["txt", "json", "md", "js", "c"]
-    private static let codeLang: [String: String] = ["js": "js", "c": "c", "json": "js"]
+    /// Extension → CodeHighlight language (§5.3's full map). Absent = plain monospace.
+    private static let codeLang: [String: String] = [
+        "js": "js", "jsx": "js", "json": "js", "ts": "ts", "tsx": "ts",
+        "c": "c", "h": "c", "cpp": "cpp", "hpp": "cpp",
+        "rs": "rust", "go": "go", "py": "python", "jl": "julia", "swift": "swift",
+        "java": "java", "kt": "kotlin", "rb": "ruby", "sh": "shell", "sql": "sql",
+        "tex": "tex", "css": "css", "xml": "xml", "html": "xml", "htm": "xml",
+        "yaml": "yaml", "yml": "yaml", "toml": "toml",
+    ]
 
     // ── Card bodies ───────────────────────────────────────────────────────────────────
 
     private static func imageCard(_ img: NSImage, badge: String?, name: String, width: CGFloat,
-                                  compact: Bool, theme: Theme) -> NSImage {
+                                  size cardSize: AttachmentSize, compact: Bool, theme: Theme) -> NSImage {
         let px = img.size
         guard px.width > 0, px.height > 0 else {
             return metaCard(name: name, detail: "unreadable image",
@@ -155,7 +231,7 @@ extension NSView {
         if compact {
             size = NSSize(width: gridCellW, height: gridCellH)
         } else {
-            let scale = min(width / px.width, imageMaxH / px.height, 1)
+            let scale = min(width / px.width, maxH(cardSize) / px.height, 1)
             size = NSSize(width: max(90, px.width * scale), height: max(60, px.height * scale))
         }
         return draw(size: size, theme: theme) { rect in
@@ -177,7 +253,8 @@ extension NSView {
     }
 
     private static func pdfCard(_ page: PDFPage, pages: Int, name: String, bytes: Int,
-                                width: CGFloat, compact: Bool, theme: Theme) -> NSImage {
+                                width: CGFloat, size cardSize: AttachmentSize, compact: Bool,
+                                theme: Theme) -> NSImage {
         let footerH: CGFloat = compact ? 24 : 28
         let bounds = page.bounds(for: .mediaBox)
         let aspect = bounds.height > 0 ? bounds.width / bounds.height : 0.77
@@ -185,7 +262,7 @@ extension NSView {
         if compact {
             size = NSSize(width: gridCellW, height: gridCellH)
         } else {
-            let pageH = min(imageMaxH, width / max(aspect, 0.1))
+            let pageH = min(maxH(cardSize), width / max(aspect, 0.1))
             size = NSSize(width: width, height: pageH + footerH)
         }
         let thumbW = size.width
@@ -205,9 +282,10 @@ extension NSView {
     }
 
     private static func textCard(_ text: String, ext: String, name: String, bytes: Int,
-                                 width: CGFloat, compact: Bool, theme: Theme) -> NSImage {
+                                 width: CGFloat, size cardSize: AttachmentSize, compact: Bool,
+                                 theme: Theme) -> NSImage {
         let headerH: CGFloat = compact ? 24 : 28
-        let lineCount = compact ? 4 : 8
+        let lineCount = compact ? 4 : textLines(cardSize)
         let font = NSFont(name: "Menlo", size: compact ? 9 : 11)
             ?? NSFont.monospacedSystemFont(ofSize: compact ? 9 : 11, weight: .regular)
         let lines = text.components(separatedBy: "\n").prefix(lineCount).joined(separator: "\n")
@@ -230,6 +308,151 @@ extension NSView {
                                  height: rect.height - headerH - 12))
             footerBar("\(name) · \(langLabel(ext)) · \(fmtBytes(bytes))", icon: "chevron.left.forwardslash.chevron.right",
                       height: headerH, in: rect, atTop: true, theme: theme)
+        }
+    }
+
+    /// CSV/TSV: the first rows drawn as an actual table — header row emphasized, hairline
+    /// separators. Naive split (quoted commas aren't parsed); the card is a preview, the
+    /// file opens real apps.
+    private static func tableCard(_ text: String, tab: Bool, name: String, bytes: Int,
+                                  width: CGFloat, size cardSize: AttachmentSize, compact: Bool,
+                                  theme: Theme) -> NSImage {
+        let footerH: CGFloat = compact ? 24 : 28
+        let maxRows = compact ? 4 : min(6, textLines(cardSize))
+        let maxCols = compact ? 3 : 4
+        let rows = text.components(separatedBy: "\n").prefix(maxRows).map { line in
+            line.split(separator: tab ? "\t" : ",", omittingEmptySubsequences: false)
+                .prefix(maxCols).map { $0.trimmingCharacters(in: .whitespaces) }
+        }.filter { !$0.isEmpty }
+        guard !rows.isEmpty else {
+            return metaCard(name: name, detail: "empty file",
+                            icon: NSWorkspace.shared.icon(for: .commaSeparatedText),
+                            width: width, theme: theme)
+        }
+        let cols = rows.map(\.count).max() ?? 1
+        let rowH: CGFloat = compact ? 18 : 22
+        let size = compact ? NSSize(width: gridCellW, height: gridCellH)
+            : NSSize(width: width, height: CGFloat(rows.count) * rowH + footerH + 10)
+        return draw(size: size, theme: theme) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner).addClip()
+            NSColor(theme.text).withAlphaComponent(0.045).setFill()
+            rect.fill()
+            let table = NSRect(x: 8, y: 6, width: rect.width - 16,
+                               height: rect.height - footerH - 10)
+            let colW = table.width / CGFloat(cols)
+            let line = NSColor(theme.text).withAlphaComponent(0.14)
+            for (r, cells) in rows.enumerated() {
+                let y = table.maxY - CGFloat(r + 1) * rowH
+                guard y >= table.minY - 1 else { break }
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: compact ? 9 : 10.5,
+                                             weight: r == 0 ? .semibold : .regular),
+                    .foregroundColor: NSColor(theme.text)
+                        .withAlphaComponent(r == 0 ? 0.95 : 0.75),
+                ]
+                for (c, cell) in cells.enumerated() {
+                    let x = table.minX + CGFloat(c) * colW
+                    (truncate(cell, width: colW - 12, attrs: attrs) as NSString)
+                        .draw(at: NSPoint(x: x + 4, y: y + (rowH - 14) / 2), withAttributes: attrs)
+                }
+                if r > 0 { // hairline above every data row
+                    line.setFill()
+                    NSRect(x: table.minX, y: y + rowH - 0.5, width: table.width, height: 0.5).fill()
+                }
+            }
+            for c in 1 ..< cols {
+                line.setFill()
+                NSRect(x: table.minX + CGFloat(c) * colW, y: table.minY,
+                       width: 0.5, height: table.height).fill()
+            }
+            footerBar("\(name) · \(tab ? "TSV" : "CSV") · \(fmtBytes(bytes))",
+                      icon: "tablecells", height: footerH, in: rect, atTop: true, theme: theme)
+        }
+    }
+
+    // ── Doc family: Quick Look first-page thumbs (async, disk-cached) ────────────────
+
+    private enum DocThumb {
+        case ready(NSImage)
+        case rendering
+        case unavailable
+    }
+
+    /// Thumbs live at `files/thumbs/<hash>@<width>.png` (content-addressed → immutable;
+    /// removed with the blob). A `.noThumb` sentinel remembers QL declining, so a file the
+    /// system can't page-render costs exactly one attempt, ever. Pages are theme-neutral
+    /// rasters — no theme in the key.
+    private static var thumbsInFlight: Set<String> = []
+
+    private static func docThumb(url: URL, token: AttachmentToken, store: AttachmentStore,
+                                 width: CGFloat, compact: Bool) -> DocThumb {
+        guard let hash = store.resolveHash(forId: token.id) else { return .unavailable }
+        let w = Int(compact ? gridCellW : width)
+        let stem = "\(hash)@\(w)"
+        let thumbURL = store.thumbsDir.appendingPathComponent("\(stem).png")
+        let sentinel = store.thumbsDir.appendingPathComponent("\(stem).noThumb")
+        if let img = NSImage(contentsOf: thumbURL) {
+            return .ready(img)
+        }
+        if FileManager.default.fileExists(atPath: sentinel.path) {
+            return .unavailable
+        }
+        if !thumbsInFlight.contains(stem) {
+            thumbsInFlight.insert(stem)
+            let req = QLThumbnailGenerator.Request(
+                fileAt: url, size: CGSize(width: CGFloat(w), height: CGFloat(w) * 1.4),
+                scale: 2, representationTypes: .thumbnail // .thumbnail ONLY: an icon-only
+            ) //                                             answer arrives as an error, §5.5
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { rep, err in
+                Task { @MainActor in
+                    thumbsInFlight.remove(stem)
+                    try? FileManager.default.createDirectory(at: store.thumbsDir,
+                                                             withIntermediateDirectories: true)
+                    if let cg = rep?.cgImage,
+                       let png = NSBitmapImageRep(cgImage: cg)
+                       .representation(using: .png, properties: [:]) {
+                        try? png.write(to: thumbURL)
+                    } else {
+                        attachLog.notice("""
+                        doc thumb declined for \(token.name, privacy: .public): \
+                        \(err.map { "\($0)" } ?? "nil rep", privacy: .public)
+                        """)
+                        try? Data().write(to: sentinel)
+                    }
+                    // Repaint: generation is IN the preview's rebuild key (without the bump
+                    // the placeholder never recomposes), attachmentsDidArrive is the wake
+                    // that makes SwiftUI re-evaluate the hosting views at all.
+                    store.thumbsDidChange()
+                    CalendarEngine.mainInstance?.attachmentsDidArrive()
+                }
+            }
+        }
+        return .rendering
+    }
+
+    /// A rendered first page + footer — the pdf card's shape, fed by a QL raster.
+    private static func pageCard(_ page: NSImage, name: String, bytes: Int, width: CGFloat,
+                                 size cardSize: AttachmentSize, compact: Bool,
+                                 theme: Theme) -> NSImage {
+        let footerH: CGFloat = compact ? 24 : 28
+        let px = page.size
+        let aspect = px.height > 0 ? px.width / px.height : 0.77
+        let size: NSSize
+        if compact {
+            size = NSSize(width: gridCellW, height: gridCellH)
+        } else {
+            let pageH = min(maxH(cardSize), width / max(aspect, 0.1))
+            size = NSSize(width: width, height: pageH + footerH)
+        }
+        return draw(size: size, theme: theme) { rect in
+            NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner).addClip()
+            NSColor.white.setFill() // a document page is a page — white ground in both themes
+            rect.fill()
+            let pageRect = NSRect(x: 0, y: footerH, width: rect.width, height: rect.height - footerH)
+            let h = pageRect.width / max(aspect, 0.1)
+            page.draw(in: NSRect(x: 0, y: pageRect.maxY - h, width: pageRect.width, height: h))
+            footerBar("\(name) · \(fmtBytes(bytes))", icon: "doc.text",
+                      height: footerH, in: rect, theme: theme)
         }
     }
 
@@ -324,7 +547,11 @@ extension NSView {
     }
 
     private static func langLabel(_ ext: String) -> String {
-        ["js": "JavaScript", "c": "C", "json": "JSON", "md": "Markdown", "txt": "Text"][ext]
+        ["js": "JavaScript", "jsx": "JavaScript", "ts": "TypeScript", "tsx": "TypeScript",
+         "c": "C", "h": "C", "cpp": "C++", "hpp": "C++", "rs": "Rust", "go": "Go",
+         "py": "Python", "jl": "Julia", "swift": "Swift", "java": "Java", "kt": "Kotlin",
+         "rb": "Ruby", "sh": "Shell", "sql": "SQL", "tex": "LaTeX", "css": "CSS",
+         "html": "HTML", "htm": "HTML", "json": "JSON", "md": "Markdown", "txt": "Text"][ext]
             ?? ext.uppercased()
     }
 

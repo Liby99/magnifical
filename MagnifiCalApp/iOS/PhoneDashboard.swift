@@ -211,7 +211,7 @@ private struct PhoneNotePanel: View {
                 // Managed import blocks flattened: their HTML-comment markers would render
                 // as paragraphs in a plain markdown pass.
                 PhoneMarkdown(text: ManagedNote.flattenManaged(text), accent: Theme.accent,
-                              theme: theme)
+                              theme: theme, attachments: engine.attachments)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

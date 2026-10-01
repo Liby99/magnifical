@@ -46,6 +46,20 @@ public enum ChangelogContent {
     /// Newest first. Keep entries ONE line each, user-visible phrasing.
     public static let releases: [ChangelogRelease] = [
         ChangelogRelease(
+            version: "0.5.0", date: "October 1, 2026",
+            headline: "Attach files to your notes — previewed, synced, and managed.",
+            changes: [
+                .init(.added, "**Attachments**: paste or drag files into any note — events, days, weeks, months. Images display inline, PDFs and Office/iWork documents show their first page, code renders syntax-colored and CSVs as a table; attaching the same file twice stores it once."),
+                .init(.added, "Cards behave like files: click to select, **space** for Quick Look, double-click to open, **⌘C** copies the real file, right-click for Open / Reveal in Finder / Show in Attachment Browser / Remove from Note — and drag a selected card's edges between three sizes."),
+                .init(.added, "**Attachments sync via iCloud** and show up in the iPhone's note previews (tap one for Quick Look); a card whose file is still arriving fills itself in the moment it lands."),
+                .init(.added, "**File ▸ Attachment Browser**: every attached file with its size and everything that references it — jump to a referencing note or event, reveal in Finder, remove unreferenced files. Unused files also clean themselves up after a 7-day grace period."),
+                .init(.added, "**Backups carry attachments** — exporting packs every file your notes reference; importing restores them, integrity-checked."),
+                .init(.fixed, "File drops are dependable everywhere: no more silent failures that depended on the view you were in or where the drag entered the window — and files dragged straight out of Mail, Outlook, or a browser attach too."),
+                .init(.improved, "**Filter by Tags** lists every tag, most-used first with case variants merged, and the # autocomplete suggests each tag once."),
+                .init(.fixed, "Deleted events can no longer resurrect via a development build, a pinch zoom can no longer stick between views, and the AI assistant's clock stays current across long conversations."),
+            ]
+        ),
+        ChangelogRelease(
             version: "0.4.1", date: "September 16, 2026",
             headline: "Band events cross month boundaries.",
             changes: [

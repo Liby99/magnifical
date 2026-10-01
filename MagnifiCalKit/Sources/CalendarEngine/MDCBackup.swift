@@ -10,6 +10,9 @@
 
 import CalendarGeometry
 import Foundation
+#if canImport(UniformTypeIdentifiers)
+    import UniformTypeIdentifiers
+#endif
 
 public enum MDCBackup {
     public static let app = "magnifical" // manifest interchange id (file extension is .mgc / legacy .mdc)
@@ -35,10 +38,23 @@ public enum MDCBackup {
         }
     }
 
+    /// One attachment going into (or coming out of) a backup: the blob + its identity.
+    public struct FileEntry: Sendable {
+        public let hash: String // full sha256
+        public let name: String
+        public let uti: String
+        public let data: Data
+        public init(hash: String, name: String, uti: String, data: Data) {
+            self.hash = hash; self.name = name; self.uti = uti; self.data = data
+        }
+    }
+
     /// ── ENCODE ──────────────────────────────────────────────────────────────────────
-    /// Build the two JSON entries of a `.mdc` zip from the engine's state.
-    public static func encode(_ s: PersistedState, exportedAt: Date, username: String = "magical")
-        throws -> [String: Data] {
+    /// Build the JSON entries of a `.mdc` zip from the engine's state, plus one
+    /// `files/<sha256>.<ext>` entry per attachment (the web export's convention — its
+    /// `attachment` table row carries the identity; the note linkage IS the note text).
+    public static func encode(_ s: PersistedState, exportedAt: Date, username: String = "magical",
+                              attachments: [FileEntry] = []) throws -> [String: Data] {
         var items: [[String: Any]] = []
         for e in s.events {
             items.append(itemRow(timed: e, rich: s.rich?[e.id], at: exportedAt))
@@ -59,6 +75,17 @@ public enum MDCBackup {
             ["userId": "", "date": $0.key, "notes": $0.value, "updatedAt": dateVal(exportedAt)]
         }
 
+        var attachmentRows: [[String: Any]] = []
+        var fileEntries: [String: Data] = [:]
+        for a in attachments.sorted(by: { $0.hash < $1.hash }) {
+            let path = storagePath(hash: a.hash, name: a.name)
+            attachmentRows.append(["id": a.hash, "userId": "", "filename": a.name,
+                                   "mime": mime(forUTI: a.uti, name: a.name), "bytes": a.data.count,
+                                   "sha256": a.hash, "storagePath": path,
+                                   "createdAt": dateVal(exportedAt)])
+            fileEntries["files/\(path)"] = a.data
+        }
+
         var db: [String: Any] = [:]
         for t in tables {
             db[t] = [] as [Any]
@@ -66,6 +93,7 @@ public enum MDCBackup {
         db["calendarItem"] = items
         db["calendarPrefs"] = [prefsRow]
         db["dailyNote"] = noteRows
+        db["attachment"] = attachmentRows
 
         var counts: [String: Int] = [:]
         for t in tables {
@@ -73,13 +101,29 @@ public enum MDCBackup {
         }
         let manifest: [String: Any] = [
             "app": app, "format": format, "exportedAt": iso(exportedAt),
-            "username": username, "counts": counts, "files": 0,
+            "username": username, "counts": counts, "files": fileEntries.count,
         ]
 
-        return try [
-            "database.json": JSONSerialization.data(withJSONObject: db, options: []),
-            "manifest.json": JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]),
-        ]
+        var out = fileEntries
+        out["database.json"] = try JSONSerialization.data(withJSONObject: db, options: [])
+        out["manifest.json"] = try JSONSerialization.data(withJSONObject: manifest,
+                                                          options: [.prettyPrinted, .sortedKeys])
+        return out
+    }
+
+    /// The zip-entry leaf for a blob — `<sha256>.<ext>`, matching the web's storagePath.
+    private static func storagePath(hash: String, name: String) -> String {
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ext.isEmpty ? hash : "\(hash).\(ext)"
+    }
+
+    private static func mime(forUTI uti: String, name: String) -> String {
+        #if canImport(UniformTypeIdentifiers)
+            if let m = UTType(uti)?.preferredMIMEType {
+                return m
+            }
+        #endif
+        return "application/octet-stream"
     }
 
     private static func itemRow(timed e: TimedEvent, rich: RichFields?, at now: Date) -> [String: Any] {
@@ -173,6 +217,40 @@ public enum MDCBackup {
         }
         return PersistedState(events: events, bands: bands, deadlines: deadlines,
                               monthTrackNames: trackNames, rich: rich, dailyNotes: dailyNotes)
+    }
+
+    /// The backup's attachments: `attachment` table rows joined to their `files/` payloads.
+    /// Rows missing a payload (or a hash) are skipped; legacy backups without `files/` → [].
+    /// Verification is NOT done here — the AttachmentStore's adopt path hash-checks on landing.
+    public static func decodeAttachments(_ files: [String: Data]) -> [FileEntry] {
+        guard let dbData = files["database.json"],
+              let db = try? JSONSerialization.jsonObject(with: dbData) as? [String: Any]
+        else { return [] }
+        var out: [FileEntry] = []
+        for row in (db["attachment"] as? [[String: Any]]) ?? [] {
+            guard let hash = (row["sha256"] as? String) ?? (row["id"] as? String),
+                  let path = row["storagePath"] as? String,
+                  let data = files["files/\(path)"] else { continue }
+            let name = (row["filename"] as? String) ?? path
+            out.append(FileEntry(hash: hash, name: name,
+                                 uti: uti(fromMime: row["mime"] as? String, name: name),
+                                 data: data))
+        }
+        return out
+    }
+
+    /// Best-effort UTI from the row's mime (web backups) with a filename-extension fallback.
+    private static func uti(fromMime mime: String?, name: String) -> String {
+        #if canImport(UniformTypeIdentifiers)
+            if let mime, let t = UTType(mimeType: mime) {
+                return t.identifier
+            }
+            let ext = (name as NSString).pathExtension
+            if !ext.isEmpty, let t = UTType(filenameExtension: ext) {
+                return t.identifier
+            }
+        #endif
+        return "public.data"
     }
 
     private static func richFrom(_ row: [String: Any]) -> RichFields {

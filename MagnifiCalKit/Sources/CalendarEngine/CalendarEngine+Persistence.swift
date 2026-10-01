@@ -114,11 +114,51 @@ extension CalendarEngine {
         NotificationScheduler.shared.requestResync() // data changed → re-plan the pending window
     }
 
+    /// A synced attachment blob landed (no note text changed): repaint every preview whose
+    /// "waiting for iCloud" card can now show content. Same bump pair setDailyNote uses.
+    public func attachmentsDidArrive() {
+        caches.noteGen &+= 1
+        noteEdits.gen &+= 1
+        wake()
+    }
+
+    /// Every attachment id (token hash prefix) referenced anywhere in a state's notes —
+    /// event notes, per-occurrence notes, and daily/weekly/monthly notes. THE derived-refcount
+    /// primitive (design §7): the notes are the reference database; nothing is stored.
+    static func attachmentIds(in state: PersistedState) -> Set<String> {
+        var ids = Set<String>()
+        for rf in (state.rich ?? [:]).values {
+            if let n = rf.notes {
+                ids.formUnion(AttachmentTokens.ids(in: n))
+            }
+            for n in (rf.occurrenceNotes ?? [:]).values {
+                ids.formUnion(AttachmentTokens.ids(in: n))
+            }
+        }
+        for n in (state.dailyNotes ?? [:]).values {
+            ids.formUnion(AttachmentTokens.ids(in: n))
+        }
+        return ids
+    }
+
     /// Diff the freshly-persisted state against what the sync layer last saw and emit the
     /// changed record ids. Before the cloud layer attaches, just track the baseline.
     private func emitDelta(to state: PersistedState) {
         guard let onLocalChange else { syncedState = state; return }
-        let (up, del) = Self.recordDelta(from: syncedState, to: state)
+        var (up, del) = Self.recordDelta(from: syncedState, to: state)
+        // NoteFile records (attachment blobs, design §6): a hash NEWLY referenced by this
+        // calendar's notes uploads its blob; a hash no longer referenced ANYWHERE in this
+        // calendar deletes its record from this zone (other calendars own their own copies;
+        // the LOCAL blob is untouched — the P3 sweep is the only local-space authority).
+        // Token ids are hash PREFIXES; records are named by the full hash — unresolvable ids
+        // (blob not here yet, e.g. the token synced before its NoteFile) simply skip: there
+        // is nothing to upload, and the record wasn't ours to delete.
+        let oldRefs = syncedState.map(Self.attachmentIds(in:)) ?? []
+        let newRefs = Self.attachmentIds(in: state)
+        up += newRefs.subtracting(oldRefs)
+            .compactMap { attachments.resolveHash(forId: $0).map { CloudSync.filePrefix + $0 } }
+        del += oldRefs.subtracting(newRefs)
+            .compactMap { attachments.resolveHash(forId: $0).map { CloudSync.filePrefix + $0 } }
         syncedState = state
         let dn = up.filter { $0.hasPrefix(CloudSync.dnotePrefix) }
             + del.filter { $0.hasPrefix(CloudSync.dnotePrefix) }.map { "-" + $0 }
@@ -267,16 +307,41 @@ extension CalendarEngine {
         schedulePersist()
     }
 
-    /// Write the whole calendar to a `.mdc` backup (a zip mirroring the web export). Throws on I/O error.
+    /// Write the whole calendar to a `.mdc` backup (a zip mirroring the web export), including
+    /// every attachment THIS calendar's notes reference (other calendars keep their own blobs;
+    /// a still-syncing blob exports its token only and heals from the cloud after restore).
     public func exportMDC(to url: URL) throws {
-        let files = try MDCBackup.encode(exportState(), exportedAt: Date())
+        let state = exportState()
+        var entries: [MDCBackup.FileEntry] = []
+        var packed: Set<String> = []
+        for id in Self.attachmentIds(in: state) {
+            guard let hash = attachments.resolveHash(forId: id), !packed.contains(hash),
+                  let meta = attachments.meta(forId: hash),
+                  let blob = attachments.url(forId: hash),
+                  let data = try? Data(contentsOf: blob) else { continue }
+            packed.insert(hash)
+            entries.append(MDCBackup.FileEntry(hash: hash, name: meta.name, uti: meta.uti,
+                                               data: data))
+        }
+        let files = try MDCBackup.encode(state, exportedAt: Date(), attachments: entries)
         try Zipper.write(files, to: url)
     }
 
-    /// Restore a `.mdc` (or the web's `.zip`) backup — replaces the entire local dataset (undoable).
+    /// Restore a `.mdc` (or the web's `.zip`) backup — replaces the entire local dataset
+    /// (undoable). Attachment payloads land in the CAS hash-verified (a tampered entry is
+    /// dropped; its token then shows the waiting card, recoverable from the cloud).
     public func importMDC(from url: URL) throws {
-        let state = try MDCBackup.decode(Zipper.read(url))
+        let files = try Zipper.read(url)
+        let state = try MDCBackup.decode(files)
         replaceAll(state)
+        var adopted = 0
+        for f in MDCBackup.decodeAttachments(files)
+            where attachments.adoptData(f.data, declaredHash: f.hash, name: f.name, uti: f.uti) {
+            adopted += 1
+        }
+        if adopted > 0 {
+            attachmentsDidArrive() // any waiting card repaints into content
+        }
     }
 
     /// Import an `.ics` file's events as editable items. Returns how many were added.

@@ -47,6 +47,9 @@ public enum MenuWindow: Sendable { case assistant, help, settings, changelog }
     case .exportMDC: if let e = ctx.engine() {
             MenuFileActions.exportMDC(e)
         }
+    // The browser opens off CalendarView's observer (it owns the engine AND the navigate-to-ref
+    // jump), so the menu item and the Settings ▸ Developer button share one entry path.
+    case .attachmentBrowser: NotificationCenter.default.post(name: .openAttachmentBrowser, object: nil)
     case .printCalendar: NotificationCenter.default.post(name: .requestPrint, object: nil)
     case .deselectAll: ctx.engine()?.deselectAll()
     case .goToYear: ctx.engine()?.goToCurrent("year")

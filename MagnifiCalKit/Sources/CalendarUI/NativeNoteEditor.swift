@@ -70,12 +70,14 @@ struct NativeNoteEditor: NSViewRepresentable {
     /// NSTextView subclass owning the editor-local key equivalents. performKeyEquivalent (not
     /// the app key monitor): the monitor deliberately steps aside for text first responders,
     /// and ⌘S must work exactly and only while this editor is focused.
-    final class EditorTextView: NSTextView {
+    final class EditorTextView: NSTextView, DropTarget {
         var onSaveKey: (() -> Void)?
         var onEscKey: (() -> Void)?
         var placeholderText = ""
         var themeText: NSColor = .labelColor
         var attachmentStore: (() -> AttachmentStore?)?
+        var inDrawerContext = false // set from the storageKey ("drawer|…") in updateNSView
+        var dropTier: Int { inDrawerContext ? 0 : 3 } // see DropTarget
 
         /// Covered by the drawer (see MarkdownPreview.suspended): cursor rects and
         /// mouseMoved assert the I-beam regardless of hitTest — gate them so the drawer's
@@ -102,13 +104,19 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         // ── Attachment import: paste / drag (design §5.1) ─────────────────────────────
-        /// AppKit recomputes a text view's drag registration on focus/editability changes,
-        /// and a PLAIN-text view's own list doesn't reliably include file URLs — if it drops
-        /// out, the margin scroll view's registration shadows the text view and on-line drops
-        /// die. Pin .fileURL through every re-evaluation (the preview does the same).
-        override func updateDragTypeRegistration() {
-            super.updateDragTypeRegistration()
-            registerForDraggedTypes(registeredDraggedTypes + [.fileURL])
+        // FILE-drag registration deliberately does NOT live here: the window-wide
+        // AttachmentDropRouter is the only AppKit destination for files/promises and
+        // forwards the dragging calls below — a participant registering its own file
+        // types would re-enter AppKit's sticky-destination lottery and could receive a
+        // session directly, bypassing the router's tiers and modal gating (the "drop on
+        // the drawer landed in the weekly note behind it" bug). The text view keeps only
+        // NSTextView's own text-drag types.
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window {
+                DropTargets.register(self)
+                AttachmentDropRouter.install(in: window)
+            }
         }
         /// ⌘V with files or image/PDF DATA on the pasteboard → import into the blob store and
         /// insert tokens at the caret; anything else falls through to the plain-text paste.
@@ -120,13 +128,16 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            guard attachDropVisible else {
-                attachLog.log("editor entered REFUSED: invisible (parked panel)")
-                return [] // a parked twin must never steal the drop from the visible editor
+            // The router filters parked/covered views already; the guards repeat here as
+            // defense in depth (NSTextView's own text-type registration can still receive
+            // sessions directly, and unit tests drive these methods without the router).
+            guard attachDropVisible, !suspended else {
+                attachLog.notice("editor entered REFUSED: parked or drawer-covered")
+                return []
             }
-            let urls = fileURLs(on: sender.draggingPasteboard)
-            attachLog.log("editor entered: store=\(self.attachmentStore?() != nil) urls=\(urls?.count ?? 0)")
-            if attachmentStore?() != nil, urls != nil {
+            let ok = AttachmentDropIntake.hasImportableFiles(sender.draggingPasteboard)
+            attachLog.notice("editor entered: store=\(self.attachmentStore?() != nil) importable=\(ok)")
+            if attachmentStore?() != nil, ok {
                 return .copy
             }
             return super.draggingEntered(sender)
@@ -137,28 +148,34 @@ struct NativeNoteEditor: NSViewRepresentable {
         /// downgrade what our draggingEntered accepted (prepare refusing is why drops
         /// "accepted" with a green + landed nothing).
         override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+            if attachmentStore?() != nil,
+               AttachmentDropIntake.hasImportableFiles(sender.draggingPasteboard) {
                 return .copy
             }
             return super.draggingUpdated(sender)
         }
 
         override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            if attachmentStore?() != nil, fileURLs(on: sender.draggingPasteboard) != nil {
+            if attachmentStore?() != nil,
+               AttachmentDropIntake.hasImportableFiles(sender.draggingPasteboard) {
                 return true
             }
             return super.prepareForDragOperation(sender)
         }
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            if attachDropVisible, attachmentStore?() != nil,
-               let urls = fileURLs(on: sender.draggingPasteboard) {
-                attachLog.log("editor perform: urls=\(urls.count)")
+            if attachDropVisible, let store = attachmentStore?() {
                 let p = convert(sender.draggingLocation, from: nil)
-                importFiles(urls, at: characterIndexForInsertion(at: p))
-                return true
+                let index = characterIndexForInsertion(at: p)
+                // Promise drops deliver LATER — insertTokens clamps the captured index.
+                if AttachmentDropIntake.receive(sender.draggingPasteboard, store: store,
+                                                deliver: { [weak self] in
+                                                    self?.insertTokens($0, at: index)
+                                                }) {
+                    return true
+                }
             }
-            attachLog.log("editor perform FELL THROUGH to super (visible=\(self.attachDropVisible))")
+            attachLog.notice("editor perform FELL THROUGH to super (visible=\(self.attachDropVisible))")
             return super.performDragOperation(sender)
         }
 
@@ -194,6 +211,11 @@ struct NativeNoteEditor: NSViewRepresentable {
             return false
         }
 
+        /// The margin drop's delivery: append after the last line (index clamps inside).
+        func appendTokens(_ tokens: [AttachmentToken]) {
+            insertTokens(tokens, at: (string as NSString).length)
+        }
+
         func importFiles(_ urls: [URL], at index: Int) {
             guard let store = attachmentStore?() else { return }
             var tokens: [AttachmentToken] = []
@@ -202,7 +224,7 @@ struct NativeNoteEditor: NSViewRepresentable {
                     attachLog.error("editor import FAILED \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
-            attachLog.log("editor import: urls=\(urls.count) imported=\(tokens.count) at=\(index)")
+            attachLog.notice("editor import: urls=\(urls.count) imported=\(tokens.count) at=\(index)")
             if tokens.isEmpty {
                 NSSound.beep() // unreadable / over the size cap
                 return
@@ -464,9 +486,11 @@ struct NativeNoteEditor: NSViewRepresentable {
     /// overlay and drop-append at the END of the note; drags over the text itself stay with
     /// the text view's caret-positioned drop (no overlay), because AppKit routes a drag to
     /// the deepest registered view — this scroll view only ever hears the margin.
-    final class MarginDropScrollView: InertableScrollView {
+    final class MarginDropScrollView: InertableScrollView, DropTarget {
         var store: (() -> AttachmentStore?)?
-        var onDropAtEnd: (([URL]) -> Void)?
+        var onDropTokens: (([AttachmentToken]) -> Void)?
+        var inDrawerContext = false
+        var dropTier: Int { inDrawerContext ? 1 : 4 } // see DropTarget
         private let overlay = OverlayView()
 
         /// Draw-only overlay above the clip view (never a hit-test target).
@@ -481,31 +505,35 @@ struct NativeNoteEditor: NSViewRepresentable {
         }
 
         func installMarginDrop() {
-            registerForDraggedTypes([.fileURL])
+            // No registerForDraggedTypes: the router is the sole AppKit file destination
+            // and forwards here (see DropRouter.swift / the editor's note above).
             overlay.isHidden = true
             overlay.frame = bounds
             overlay.autoresizingMask = [.width, .height]
             addSubview(overlay, positioned: .above, relativeTo: nil)
         }
 
-        private func urls(_ pb: NSPasteboard) -> [URL]? {
-            let u = (pb.readObjects(forClasses: [NSURL.self],
-                                    options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
-            return u.isEmpty ? nil : u
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window {
+                DropTargets.register(self)
+                AttachmentDropRouter.install(in: window)
+            }
         }
+
 
         // NO super calls in these four: NSDraggingDestination's methods are OPTIONAL and a
         // plain NSScrollView implements none of them — super.draggingEnded(_:) raised
         // "unrecognized selector" mid-drag-completion and killed the whole drop. (NSTextView
         // DOES implement them, which is why the preview's overrides may call super.)
         override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            guard attachDropVisible else {
-                attachLog.log("margin entered REFUSED: invisible (parked panel)")
+            guard attachDropVisible, !inert else { // defense in depth; the router filters too
+                attachLog.notice("margin entered REFUSED: parked or drawer-covered")
                 return []
             }
-            let u = urls(sender.draggingPasteboard)
-            attachLog.log("margin entered: store=\(self.store?() != nil) urls=\(u?.count ?? 0)")
-            guard store?() != nil, u != nil else { return [] }
+            let ok = AttachmentDropIntake.hasImportableFiles(sender.draggingPasteboard)
+            attachLog.notice("margin entered: store=\(self.store?() != nil) importable=\(ok)")
+            guard store?() != nil, ok else { return [] }
             overlay.isHidden = false
             return .copy
         }
@@ -528,10 +556,9 @@ struct NativeNoteEditor: NSViewRepresentable {
 
         override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
             overlay.isHidden = true
-            guard let dropped = urls(sender.draggingPasteboard) else { return false }
-            attachLog.log("margin perform: urls=\(dropped.count)")
-            onDropAtEnd?(dropped)
-            return true
+            guard let store = store?(), let onDropTokens else { return false }
+            return AttachmentDropIntake.receive(sender.draggingPasteboard, store: store,
+                                                deliver: onDropTokens)
         }
     }
 
@@ -577,9 +604,8 @@ struct NativeNoteEditor: NSViewRepresentable {
 
         let scroll = MarginDropScrollView()
         scroll.store = { [weak co = context.coordinator] in co?.parent.attachments }
-        scroll.onDropAtEnd = { [weak tv] urls in
-            guard let tv else { return }
-            tv.importFiles(urls, at: (tv.string as NSString).length) // append after the last line
+        scroll.onDropTokens = { [weak tv] tokens in
+            tv?.appendTokens(tokens) // append after the last line
         }
         scroll.installMarginDrop()
         scroll.documentView = tv
@@ -608,6 +634,10 @@ struct NativeNoteEditor: NSViewRepresentable {
         scroll.isHidden = !active // parked tab: dormant cursor rects (see `active`)
         (scroll as? InertableScrollView)?.inert = !hitTestable // drawer-covered: mouse passes over
         (scroll.documentView as? EditorTextView)?.suspended = !hitTestable // …and no I-beam fights
+        // Drop-routing context: the drawer's editor outranks the dashboard panels' (tiers).
+        let drawerCtx = storageKey.hasPrefix("drawer|")
+        (scroll as? MarginDropScrollView)?.inDrawerContext = drawerCtx
+        (scroll.documentView as? EditorTextView)?.inDrawerContext = drawerCtx
         let co = context.coordinator
         session?.end = { [weak co] in co?.stampCreatedIfDirty() } // keep the handle fresh
         // Re-key = the previous note's editing session ENDS: stamp it through the OLD parent's

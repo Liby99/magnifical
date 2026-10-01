@@ -72,6 +72,30 @@ final class AttachmentStoreTests: XCTestCase {
         XCTAssertEqual(AttachmentTokens.ids(in: "x\n\(md)\ny \(md) z"), [t.id])
     }
 
+    func testSizeTokenRoundTrip() {
+        // size: rides in the NAME part; medium is the invisible default.
+        let base = AttachmentToken(kind: .pdf, name: "main.pdf", id: "0123456789abcdef")
+        XCTAssertFalse(base.markdown.contains("size:"), "medium is never written")
+        let big = base.with(size: .big)
+        XCTAssertEqual(big.markdown, "![@pdf:main.pdf size:big](ccfile:0123456789abcdef)")
+        let parsed = AttachmentTokens.blockToken(line: big.markdown)
+        XCTAssertEqual(parsed?.size, .big)
+        XCTAssertEqual(parsed?.name, "main.pdf", "the size token parses OUT of the display name")
+        // Aliases + case-insensitivity.
+        XCTAssertEqual(AttachmentTokens.blockToken(
+            line: "![@image:x.png size:sm](ccfile:0123456789abcdef)")?.size, .small)
+        XCTAssertEqual(AttachmentTokens.blockToken(
+            line: "![@image:x.png size:BG](ccfile:0123456789abcdef)")?.size, .big)
+        XCTAssertEqual(AttachmentTokens.blockToken(
+            line: "![@image:x.png size:md](ccfile:0123456789abcdef)")?.size, .medium)
+        // An unknown size word stays part of the name (forward compat).
+        let odd = AttachmentTokens.blockToken(line: "![@image:x size:huge](ccfile:0123456789abcdef)")
+        XCTAssertEqual(odd?.name, "x size:huge")
+        XCTAssertEqual(odd?.size, .medium)
+        // Round-trip stability: parse(render(t)) == t.
+        XCTAssertEqual(AttachmentTokens.blockToken(line: parsed!.markdown), parsed)
+    }
+
     func testUnknownKindWordParsesAsFile() {
         let line = "![@hologram:future.obj](ccfile:0123456789abcdef)"
         let tok = AttachmentTokens.blockToken(line: line)
@@ -92,6 +116,22 @@ final class AttachmentStoreTests: XCTestCase {
         XCTAssertEqual(AttachmentStore.kind(forUTI: "public.plain-text", name: "d.csv"), .data)
         XCTAssertEqual(AttachmentStore.kind(forUTI: "public.data", name: "r.docx"), .doc)
         XCTAssertEqual(AttachmentStore.kind(forUTI: "public.data", name: "a.zip"), .file)
+    }
+
+    func testRemoveDeletesBlobExportAndIndexEntry() throws {
+        let token = try store.importData(Data("doomed".utf8), suggestedName: "doomed.txt")
+        let export = try XCTUnwrap(store.displayURL(forId: token.id)) // mint the export handle
+        let hash = try XCTUnwrap(store.resolveHash(forId: token.id))
+        let gen0 = store.generation
+
+        store.remove(hash: hash)
+        XCTAssertNil(store.url(forId: token.id))
+        XCTAssertNil(store.meta(forId: token.id))
+        XCTAssertTrue(store.allEntries().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: export.path),
+                       "the display-named hardlink dir goes with the blob")
+        XCTAssertGreaterThan(store.generation, gen0, "cards repaint into the missing state")
+        store.remove(hash: hash) // unknown hash → silent no-op
     }
 
     func testMissingIdResolvesNil() {

@@ -60,7 +60,8 @@ struct PhoneEventSheet: View {
                 // ── Notes: native, selectable markdown ──
                 if !d.notes.isEmpty {
                     Divider()
-                    PhoneMarkdown(text: d.notes, accent: theme.eventBorder(d.color), theme: theme)
+                    PhoneMarkdown(text: d.notes, accent: theme.eventBorder(d.color), theme: theme,
+                                  attachments: engine.attachments)
                 }
                 Spacer(minLength: 8)
             }

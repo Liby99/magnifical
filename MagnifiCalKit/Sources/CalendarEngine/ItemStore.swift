@@ -93,10 +93,23 @@ func calendarKitBaseDir() -> URL {
     }
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory())
-    // "CalendarKit" is the ON-DISK data folder every existing install already has. The package
-    // directory was renamed MagnifiCalKit (2026-08) but this string must NEVER follow suit —
-    // renaming it would orphan every user's local calendars.
-    return base.appendingPathComponent("CalendarKit", isDirectory: true)
+    #if DEBUG
+        // DEV ISOLATION (2026-09-29): Debug builds get their OWN data root. Debug and the
+        // shipped app share a bundle id, and sharing one store + syncState while syncing to
+        // TWO CloudKit environments (Debug → Development, Release → Production) made the dev
+        // environment a resurrection reservoir: an event deleted in the shipped app (delete
+        // sent to prod only) was re-adopted into the shared store from the dev env on the next
+        // dev launch, then re-offered to prod by the next shipped run (the cross-environment
+        // unknownItem re-offer path) — deletions kept undoing themselves. Dev work must never
+        // touch the production store; this split severs every bridge (data.json, syncState.bin,
+        // records.plist, attachments, registry) in one place.
+        return base.appendingPathComponent("CalendarKit-Dev", isDirectory: true)
+    #else
+        // "CalendarKit" is the ON-DISK data folder every existing install already has. The
+        // package directory was renamed MagnifiCalKit (2026-08) but this string must NEVER
+        // follow suit — renaming it would orphan every user's local calendars.
+        return base.appendingPathComponent("CalendarKit", isDirectory: true)
+    #endif
 }
 
 /// The directory holding one calendar's files (data.json / syncState.bin / records.plist).

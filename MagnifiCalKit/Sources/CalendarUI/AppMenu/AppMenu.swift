@@ -40,7 +40,7 @@ public struct MenuShortcut: Sendable {
 public enum MenuItemID: Sendable {
     case about, openAssistant, settings, hide, quit
     case newCalendar, removeCalendar, renameCalendar
-    case importICS, importMDC, exportMDC, printCalendar
+    case importICS, importMDC, exportMDC, attachmentBrowser, printCalendar
     case deselectAll
     case goToYear, goToMonth, goToWeek, goToDay
     // View ▸ TODO List (⌘B) / Note Editor (⌘E) / Projects (⌘J) — faces of one coin: focus the
@@ -67,6 +67,7 @@ public enum MenuItemID: Sendable {
         case .importICS: "Import .ics…"
         case .importMDC: "Import Backup (.mdc)…"
         case .exportMDC: "Export Backup (.mdc)…"
+        case .attachmentBrowser: "Attachment Browser"
         case .printCalendar: "Print…"
         case .deselectAll: "Deselect All"
         case .goToYear: "Go to Current Year"
@@ -120,6 +121,7 @@ public enum MenuItemID: Sendable {
         case .printCalendar: "printer"
         case .importMDC: "square.and.arrow.down"
         case .exportMDC: "square.and.arrow.up"
+        case .attachmentBrowser: "paperclip"
         case .deselectAll: "square.dashed"
         // Go to Current — one glyph per zoom level's shape: month lanes, month grid,
         // week columns, the day's hourly timeline.
@@ -239,6 +241,7 @@ public enum AppMenu {
             .item(.renameCalendar), .separator,
             .item(.importICS), .separator,
             .item(.importMDC), .item(.exportMDC), .separator,
+            .item(.attachmentBrowser), .separator,
             .item(.printCalendar), .separator,
             .item(.closeWindow),
         ]))

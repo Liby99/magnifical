@@ -20,15 +20,14 @@ struct DeadlineAddButton: View {
     var body: some View {
         // Neutral cursor-colored ring at rest; on hover the whole affordance takes the ACCENT:
         // accent ring + plus over theme.accentWash — a SOLID near-background accent tint, so it
-        // reads as a lit-up highlight rather than a darkened edge.
+        // reads as a lit-up highlight rather than a darkened edge. NO shadows in either state
+        // (the glow + drop shadow read as smudges on the column edge) — flat and clean.
         Image(systemName: "plus")
             .font(.system(size: 8, weight: hovering ? .heavy : .bold))
             .foregroundStyle(hovering ? Theme.accent : theme.text.opacity(0.75))
             .frame(width: 15, height: 15)
             .background(Circle().fill(hovering ? theme.accentWash : theme.bg))
             .overlay(Circle().strokeBorder(hovering ? Theme.accent : theme.cursor, lineWidth: hovering ? 2 : 1.5))
-            .shadow(color: Theme.accent.opacity(hovering ? 0.35 : 0), radius: hovering ? 4 : 0)
-            .shadow(color: .black.opacity(0.3), radius: 2.5)
             .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }

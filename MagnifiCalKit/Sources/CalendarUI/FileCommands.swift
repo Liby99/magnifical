@@ -18,5 +18,7 @@ public struct FileCommands: View {
         Divider()
         Button { MenuFileActions.importMDC(engine) } label: { menuLabel(.importMDC) }
         Button { MenuFileActions.exportMDC(engine) } label: { menuLabel(.exportMDC) }
+        Divider()
+        MenuActionButton(.attachmentBrowser, engine: engine)
     }
 }

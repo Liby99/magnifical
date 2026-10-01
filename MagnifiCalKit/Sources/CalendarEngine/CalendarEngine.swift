@@ -590,6 +590,7 @@ public final class CalendarEngine {
             Self.mainInstance = self
         }
         NotificationScheduler.shared.start(engine: self) // local-notification schedule (no-op in demo/tests)
+        scheduleAttachmentSweep() // once-daily orphan reclamation (no-op in demo/tests)
     }
 
     /// Reset `items` and load the ACTIVE calendar's store into it: restore the persisted content (or seed

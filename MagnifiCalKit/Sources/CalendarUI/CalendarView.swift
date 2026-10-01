@@ -266,6 +266,15 @@ public struct CalendarView: View {
             + "demo=\(CalendarEngine.isDemoMode)")
         WindowBeepSilencer.installOnce() // stop the window beeping on keys the calendar leaves unhandled
         PresentGuard.install() // starved runloop ⇒ still present frames (the "⌘J pop" fix)
+        // The drop router's .ics fallback: import + the full-window mask (see DropRouter.swift).
+        // Weak: these are STATIC closures — a strong capture would pin the engine globally.
+        AttachmentDropRouter.icsImport = { [weak engine] urls in
+            guard let engine else { return }
+            MenuFileActions.importICSFiles(urls, engine: engine)
+        }
+        AttachmentDropRouter.icsOverlay = { on in
+            withAnimation(.easeOut(duration: 0.12)) { icsDropActive = on }
+        }
         // App shell only: the calendar WindowGroup used to carry .frame(minWidth:minHeight:) at
         // the root, which makes the window's NSHostingView re-derive min-size constraints
         // through the toolbar's Auto Layout engine on every tick (~46% of per-tick cost in the
@@ -644,6 +653,26 @@ public struct CalendarView: View {
             guard c.count == 3 else { return }
             engine.jumpToDay(c[0], c[1] - 1, c[2], onLand: land)
         }
+    }
+
+    /// Attachment browser "show in calendar": fly the MAIN window to a reference — the item
+    /// (selected; a recurring occurrence lands on its ghost) or the dated note (dashboard NOTE
+    /// tab) — then bring the calendar window forward over the browser so the flight is visible.
+    private func navigateToAttachmentRef(_ ref: AttachmentRef) {
+        switch ref.target {
+        case let .item(id, occ):
+            if let occ {
+                let c = occ.split(separator: "-").compactMap { Int($0) }
+                if c.count == 3 {
+                    engine.goToBox("\(id)@\(c[0])-\(c[1])-\(c[2])") // the occurrence's ghost box
+                    break
+                }
+            }
+            engine.revealAndSelect(id: id)
+        case let .note(key):
+            jumpToNoteKey(key)
+        }
+        catcherHandle.catcher?.window?.makeKeyAndOrderFront(nil)
     }
 
     /// The native dashboard BODY panels for this frame (cc.nativeDash): ONE container framed to
@@ -1189,7 +1218,8 @@ public struct CalendarView: View {
                     // View-menu prefs (show-hidden / timezone pickers), the prefs-changed notification, and
                     // the tag-filter toggle — bundled into one modifier (see the type-check note above).
                     .modifier(ViewPrefObservers(engine: engine, showTagFilter: $showTagFilter,
-                                                ui: ui, dashTab: $dashTab, dashNav: dashNav))
+                                                ui: ui, dashTab: $dashTab, dashNav: dashNav,
+                                                navigateRef: navigateToAttachmentRef))
             }
             .ignoresSafeArea()
             // Search overlays — siblings inside the ZStack, so they respect the toolbar safe-area inset
@@ -1217,12 +1247,14 @@ public struct CalendarView: View {
         .animation(.easeOut(duration: 0.12), value: search.query.isEmpty)
         // Drag an .ics file (from Finder, Mail, …) anywhere over the window: full-window
         // dashed-border mask while hovering; dropping imports via the File ▸ Import path.
+        // The DROP itself is the AttachmentDropRouter's fallback (the SwiftUI .onDrop host
+        // used to span the window and could hold a whole drag session hostage from the note
+        // editors — see DropRouter.swift); this overlay is just the visual, driven by it.
         .overlay {
             if icsDropActive {
                 ICSDropOverlay(theme: theme)
             }
         }
-        .onDrop(of: [.fileURL], delegate: ICSDropDelegate(engine: engine, active: $icsDropActive))
         .toolbar { mainToolbar }
         // Let the translucent window material show through the toolbar (native tint).
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
@@ -1326,6 +1358,7 @@ private struct ViewPrefObservers: ViewModifier {
     var ui: CalendarUIState
     @Binding var dashTab: DashTab
     var dashNav: NativeDashNavModel
+    var navigateRef: (AttachmentRef) -> Void // the browser's "show in calendar" jump
     @AppStorage(PrefKeys.showHiddenImported) private var showHidden = false
     @AppStorage(PrefKeys.mainTz) private var mainTz = "auto"
     @AppStorage(PrefKeys.altTz) private var altTz = "none"
@@ -1354,6 +1387,13 @@ private struct ViewPrefObservers: ViewModifier {
                 engine.pushEverythingToCloud()
             }
             // Settings ▸ Developer: category-by-category store census → unified log.
+            .onReceive(NotificationCenter.default.publisher(for: .openAttachmentBrowser)) { note in
+                AttachmentBrowser.show(engine: engine, navigate: navigateRef,
+                                       focus: note.userInfo?[AttachmentBrowser.focusKey] as? String)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .sweepAttachments)) { _ in
+                runAttachmentSweepNow(engine)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .logStoreCensus)) { _ in
                 engine.logStoreCensus(reason: "developer-button")
             }

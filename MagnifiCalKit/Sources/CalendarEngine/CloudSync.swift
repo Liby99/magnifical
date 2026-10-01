@@ -198,8 +198,12 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
             .map(\.key)
         let noteIDs = (snap.dailyNotes ?? [:]).filter { !$0.value.isEmpty }
             .map { Self.dnoteRecordName(forKey: $0.key) }
+        // Attachment blobs referenced by this calendar's notes (present locally — an
+        // unresolvable prefix has nothing to upload).
+        let fileIDs = CalendarEngine.attachmentIds(in: snap)
+            .compactMap { engine.attachments.resolveHash(forId: $0).map { Self.filePrefix + $0 } }
         let ids = snap.events.map(\.id) + snap.bands.map(\.id) + snap.deadlines.map(\.id)
-            + overlayIDs + noteIDs + [CalendarEngine.trackNamesRecordID]
+            + overlayIDs + noteIDs + fileIDs + [CalendarEngine.trackNamesRecordID]
         syncEngine.state.add(pendingRecordZoneChanges: ids.map { .saveRecord(recordID(for: $0)) })
         cloudLog.notice("CloudSync[\(self.zoneID.zoneName, privacy: .public)] full push enqueued: \(ids.count) records")
     }
@@ -419,6 +423,7 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         var rich: [String: RichFields] = [:]
         var dailyNotes: [String: String] = [:]
         var trackNames: [[String]]? = nil
+        var attachmentsArrived = 0
         // LOCAL WINS: any record with a pending (un-pushed) local change is NEWER here than on the
         // server — applying the fetched copy would revert the user's edit under their cursor (the
         // "rename keeps reverting" bug: the echo landed inside commitTxn's 0.6s window, turned the
@@ -459,22 +464,42 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
                    let text = r["text"] as? String {
                     dailyNotes[key] = text
                 }
+            case "NoteFile":
+                // Attachment blob arriving: hash-verify into the CAS (adoptRemote drops a
+                // payload that doesn't match its declared sha256). Repainted below.
+                if let hash = r["sha256"] as? String,
+                   let asset = r["payload"] as? CKAsset, let file = asset.fileURL,
+                   engine?.attachments.adoptRemote(
+                       fileURL: file, declaredHash: hash,
+                       name: r["name"] as? String ?? "file",
+                       uti: r["uti"] as? String ?? "public.data"
+                   ) == true {
+                    attachmentsArrived += 1
+                }
             default: break
             }
         }
         // Same local-wins rule for deletions: a server delete of a record we're about to save
         // must not remove it locally — our pending save recreates it server-side.
-        let deletedIDs = deletions.filter { $0.recordID.zoneID == zoneID }
+        let deletedNames = deletions.filter { $0.recordID.zoneID == zoneID }
             .map(\.recordID.recordName).filter { !locallyDirty.contains($0) }
-        for id in deletedIDs {
+        for id in deletedNames {
             knownRecords[id] = nil
         }
+        // A deleted NoteFile record means THAT CALENDAR stopped referencing the blob — the
+        // LOCAL blob is never deleted from the cloud side (the P3 sweep is the only local-
+        // space authority), and file- names must not reach applyRemote as item ids.
+        let deletedIDs = deletedNames.filter { !$0.hasPrefix(Self.filePrefix) }
         saveRecordCache()
         if !events.isEmpty || !bands.isEmpty || !deadlines.isEmpty || trackNames != nil || !deletedIDs.isEmpty
             || !rich.isEmpty || !dailyNotes.isEmpty {
             engine?.applyRemote(events: events, bands: bands, deadlines: deadlines,
                                 trackNames: trackNames, deletedIDs: deletedIDs, rich: rich,
                                 dailyNotes: dailyNotes)
+        }
+        if attachmentsArrived > 0 {
+            cloudLog.notice("CloudSync[\(self.zoneID.zoneName, privacy: .public)] adopted \(attachmentsArrived) attachment blob(s)")
+            engine?.attachmentsDidArrive() // repaint waiting cards (no note text changed)
         }
     }
 
@@ -567,6 +592,11 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
     /// storage key with ":" sanitized ("week:2026-08-16" → "dnote-week_2026-08-16"); the true
     /// key rides in a field and the sanitization is reversible (keys never contain "_").
     static let dnotePrefix = "dnote-"
+    /// NoteFile records (attachment blobs, design §6): record name = "file-" + the blob's FULL
+    /// sha256; fields sha256/name/uti/bytes + the CKAsset payload. One record per (calendar,
+    /// blob): every zone whose notes reference a hash carries its own copy, so removing a
+    /// calendar's zone can never break another calendar's attachments.
+    static let filePrefix = "file-"
 
     static func dnoteRecordName(forKey key: String) -> String {
         dnotePrefix + key.replacingOccurrences(of: ":", with: "_")
@@ -639,6 +669,23 @@ final class CloudSync: NSObject, CKSyncEngineDelegate {
         if name == CalendarEngine.trackNamesRecordID {
             let r = base(name, "TrackNames")
             r["json"] = jsonString(snap.monthTrackNames ?? []) as CKRecordValue?
+            return r
+        }
+        if name.hasPrefix(Self.filePrefix) {
+            // Attachment blob: the payload streams straight from the CAS (the blob path is
+            // content-addressed and immutable, so it stays valid for the async upload).
+            let hash = String(name.dropFirst(Self.filePrefix.count))
+            guard let store = engine?.attachments, let url = store.url(forId: hash),
+                  let meta = store.meta(forId: hash) else {
+                cloudLog.error("NoteFile materialize NIL for \(name.prefix(21), privacy: .public)… — blob absent")
+                return nil
+            }
+            let r = base(name, "NoteFile")
+            r["sha256"] = hash as NSString
+            r["name"] = meta.name as NSString
+            r["uti"] = meta.uti as NSString
+            r["bytes"] = meta.bytes as NSNumber
+            r["payload"] = CKAsset(fileURL: url)
             return r
         }
         if let key = Self.dnoteKey(fromRecordName: name) {

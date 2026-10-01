@@ -99,6 +99,89 @@ final class AttachmentPreviewTests: XCTestCase {
                       "no store (phone-ish path) → chip text, never raw plumbing")
     }
 
+    /// P4 exit criterion: a `.rs` file renders a CONTENT card (QL can't thumbnail bare
+    /// source at all — §5.5 probe — so self-rendering is the only path), and csv gets the
+    /// table card. Both stand taller than the 70pt metadata card they used to fall back to.
+    func testFullBreadthTextAndTableCards() throws {
+        let theme = Theme(dark: false)
+        let rust = try store.importData(Data("fn main() {\n    println!(\"hi\");\n}".utf8),
+                                        suggestedName: "main.rs")
+        XCTAssertEqual(rust.kind, .code)
+        let rustCard = AttachmentCards.card(for: rust, store: store, width: 480,
+                                            compact: false, theme: theme)
+        XCTAssertGreaterThan(rustCard.size.height, AttachmentCards.metaH,
+                             ".rs self-renders a content card, never just an icon")
+
+        let csv = try store.importData(Data("name,score\nalice,10\nbob,7".utf8),
+                                       suggestedName: "table.csv")
+        let csvCard = AttachmentCards.card(for: csv, store: store, width: 480,
+                                           compact: false, theme: theme)
+        XCTAssertGreaterThan(csvCard.size.height, AttachmentCards.metaH,
+                             "csv renders the table card")
+
+        // Unknown-but-readable text still gets a content card (plain mono, §5.3).
+        let ini = try store.importData(Data("[core]\n\teditor = vim".utf8),
+                                       suggestedName: "config.ini")
+        let iniCard = AttachmentCards.card(for: ini, store: store, width: 480,
+                                           compact: false, theme: theme)
+        XCTAssertGreaterThan(iniCard.size.height, AttachmentCards.metaH)
+    }
+
+    func testNewLanguagesProduceColoredRuns() {
+        for (code, lang) in [("func greet() -> String { return \"hi\" } // done", "swift"),
+                             ("SELECT id FROM users -- all", "sql"),
+                             ("package main // entry", "go"),
+                             ("key: true # flag", "yaml")] {
+            let s = CodeHighlight.highlight(code, lang: lang, base: .textColor,
+                                            font: .systemFont(ofSize: 11))
+            var colors: Set<NSColor> = []
+            s.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: s.length)) { v, _, _ in
+                if let c = v as? NSColor {
+                    colors.insert(c)
+                }
+            }
+            XCTAssertGreaterThan(colors.count, 1, "\(lang) gets keyword/comment coloring")
+        }
+    }
+
+    /// The doc family's ASYNC page card, end to end with a real (textutil-made) docx:
+    /// first sight is the "rendering preview…" placeholder; the QL raster lands on disk,
+    /// BUMPS THE STORE GENERATION (the preview's rebuild key — without the bump the
+    /// placeholder showed forever, the .xlsx field report), and the recompose is the page.
+    func testDocCardRendersItsFirstPageAsync() throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let txt = dir.appendingPathComponent("probe.txt")
+        try Data("document body text".utf8).write(to: txt)
+        let docx = dir.appendingPathComponent("probe.docx")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/textutil")
+        p.arguments = ["-convert", "docx", txt.path, "-output", docx.path]
+        try p.run()
+        p.waitUntilExit()
+
+        let tok = try store.importFile(docx)
+        XCTAssertEqual(tok.kind, .doc)
+        let theme = Theme(dark: false)
+        let gen0 = store.generation
+        let first = AttachmentCards.card(for: tok, store: store, width: 480,
+                                         compact: false, theme: theme)
+        XCTAssertEqual(first.size.height, AttachmentCards.metaH,
+                       "first sight: the placeholder while QL renders")
+
+        let deadline = Date().addingTimeInterval(15)
+        while store.generation == gen0, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertGreaterThan(store.generation, gen0,
+                             "thumb arrival must bump the repaint key — the stuck-card bug")
+        let second = AttachmentCards.card(for: tok, store: store, width: 480,
+                                          compact: false, theme: theme)
+        XCTAssertGreaterThan(second.size.height, AttachmentCards.metaH,
+                             "recompose returns the rendered page card")
+        let thumbs = (try? FileManager.default.contentsOfDirectory(atPath: store.thumbsDir.path)) ?? []
+        XCTAssertTrue(thumbs.contains { $0.hasSuffix(".png") }, "the page raster is disk-cached")
+    }
+
     /// Not an assertion — renders the composed document to a PNG artifact for eyeballing.
     func testDumpRenderArtifact() throws {
         let img = try store.importData(pngFixture(w: 400, h: 210), suggestedName: "screenshot.png")

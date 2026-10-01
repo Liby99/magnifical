@@ -1,6 +1,8 @@
 // Lightweight code-fence syntax highlighting for the markdown preview — the house languages
-// (c, c++, rust, python, js, ts, ocaml, lean, haskell, java, julia), one generic tokenizer:
-// comments (line + block per language), strings/chars, numbers, and per-language keyword sets.
+// (c, c++, rust, python, js, ts, ocaml, lean, haskell, java, julia, swift, go, kotlin, ruby,
+// shell, sql, css, tex, xml/html, yaml, toml), one generic tokenizer: comments (line + block
+// per language), strings/chars, numbers, and per-language keyword sets. Also the attachment
+// text cards' renderer (P4 full breadth — QL can't thumbnail bare source files at all, §5.5).
 // System semantic colors, so dark/light adapt for free.
 
 import AppKit
@@ -122,6 +124,94 @@ enum CodeHighlight {
             ],
             lineComments: ["#"], blockComments: [("#=", "=#")], decorators: true
         )
+        m["swift"] = Lang(
+            keywords: [
+                "actor", "any", "as", "associatedtype", "async", "await", "break", "case",
+                "catch", "class", "continue", "default", "defer", "deinit", "do", "else",
+                "enum", "extension", "fallthrough", "false", "fileprivate", "final", "for",
+                "func", "guard", "if", "import", "in", "indirect", "init", "inout", "internal",
+                "is", "lazy", "let", "mutating", "nil", "nonisolated", "open", "operator",
+                "override", "private", "protocol", "public", "repeat", "required", "rethrows",
+                "return", "self", "Self", "some", "static", "struct", "subscript", "super",
+                "switch", "throw", "throws", "true", "try", "typealias", "var", "weak", "where",
+                "while",
+            ],
+            lineComments: ["//"], blockComments: cLike, decorators: true // @MainActor, @escaping
+        )
+        m["go"] = Lang(
+            keywords: [
+                "break", "case", "chan", "const", "continue", "default", "defer", "else",
+                "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map",
+                "package", "range", "return", "select", "struct", "switch", "type", "var",
+                "true", "false", "nil", "iota", "make", "new", "len", "cap", "append", "error",
+            ],
+            lineComments: ["//"], blockComments: cLike
+        )
+        m["kotlin"] = Lang(
+            keywords: [
+                "abstract", "as", "break", "by", "catch", "class", "companion", "const",
+                "constructor", "continue", "data", "do", "else", "enum", "false", "final",
+                "finally", "for", "fun", "if", "import", "in", "init", "inline", "interface",
+                "internal", "is", "lateinit", "null", "object", "open", "override", "package",
+                "private", "protected", "public", "return", "sealed", "super", "suspend",
+                "this", "throw", "true", "try", "typealias", "val", "var", "when", "where",
+                "while",
+            ],
+            lineComments: ["//"], blockComments: cLike, decorators: true
+        )
+        m["ruby"] = Lang(
+            keywords: [
+                "alias", "and", "begin", "break", "case", "class", "def", "defined?", "do",
+                "else", "elsif", "end", "ensure", "false", "for", "if", "in", "module", "next",
+                "nil", "not", "or", "raise", "redo", "rescue", "retry", "return", "self",
+                "super", "then", "true", "undef", "unless", "until", "when", "while", "yield",
+                "require", "attr_accessor", "attr_reader", "puts",
+            ],
+            lineComments: ["#"], blockComments: [("=begin", "=end")]
+        )
+        m["shell"] = Lang(
+            keywords: [
+                "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
+                "case", "esac", "in", "function", "return", "exit", "local", "export", "readonly",
+                "shift", "set", "unset", "trap", "echo", "read", "source", "alias", "true",
+                "false", "break", "continue",
+            ],
+            lineComments: ["#"], blockComments: []
+        )
+        m["sql"] = Lang(
+            // The tokenizer matches words case-sensitively; SQL convention is either — carry both.
+            keywords: Set([
+                "select", "from", "where", "insert", "into", "values", "update", "delete",
+                "create", "table", "drop", "alter", "index", "view", "join", "inner", "outer",
+                "left", "right", "on", "as", "and", "or", "not", "null", "is", "in", "like",
+                "between", "order", "by", "group", "having", "limit", "offset", "distinct",
+                "union", "all", "exists", "primary", "key", "foreign", "references", "unique",
+                "default", "constraint", "case", "when", "then", "else", "end", "count", "sum",
+                "avg", "min", "max",
+            ].flatMap { [$0, $0.uppercased()] }),
+            lineComments: ["--"], blockComments: cLike
+        )
+        m["css"] = Lang( // no word keywords — comments/strings/numbers carry the coloring
+            keywords: ["important"],
+            lineComments: [], blockComments: cLike
+        )
+        m["tex"] = Lang( // \commands aren't words to the tokenizer; % comments do the heavy lifting
+            keywords: ["begin", "end", "documentclass", "usepackage", "section", "subsection",
+                       "item", "textbf", "textit", "emph", "label", "ref", "cite"],
+            lineComments: ["%"], blockComments: []
+        )
+        m["xml"] = Lang( // tags aren't words either; strings + <!-- --> comments still read well
+            keywords: [],
+            lineComments: [], blockComments: [("<!--", "-->")]
+        )
+        m["yaml"] = Lang(
+            keywords: ["true", "false", "null", "yes", "no", "on", "off"],
+            lineComments: ["#"], blockComments: []
+        )
+        m["toml"] = Lang(
+            keywords: ["true", "false"],
+            lineComments: ["#"], blockComments: []
+        )
         // Aliases
         m["c++"] = m["cpp"]; m["cxx"] = m["cpp"]; m["cc"] = m["cpp"]; m["h"] = m["c"]
         m["rs"] = m["rust"]
@@ -132,6 +222,12 @@ enum CodeHighlight {
         m["hs"] = m["haskell"]
         m["jl"] = m["julia"]
         m["lean4"] = m["lean"]
+        m["kt"] = m["kotlin"]; m["rb"] = m["ruby"]
+        m["sh"] = m["shell"]; m["bash"] = m["shell"]; m["zsh"] = m["shell"]
+        m["golang"] = m["go"]
+        m["latex"] = m["tex"]
+        m["html"] = m["xml"]; m["htm"] = m["xml"]
+        m["yml"] = m["yaml"]
         return m
     }()
 
